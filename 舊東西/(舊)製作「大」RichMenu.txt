@@ -1,0 +1,196 @@
+import requests
+import json
+import sys
+import os
+from PIL import Image,ImageDraw
+from linebot import (
+    LineBotApi, WebhookHandler
+)
+from tkinter import filedialog
+import configparser
+
+
+
+#給我UnClick的RichMenu，就完成所有Clicked(不知為何要放上面，我以為python不用的說...)
+def SpeedMakingClicked(RichMenuName):
+    # 使用config，挖出使用圖片
+    pictures = []
+    for i in range(0,6):
+        name = config.get("RM_%s"%RichMenuName,"data%i"%i)
+        if name[-8:] == "ToMiddle":#最後8個字為ToMiddle，刪掉
+            name = name.rstrip("ToMiddle")
+        pictures.append(name)
+        print("get picture %i %s"%(i,name))
+    
+    
+    for times in range(0,6):#做6次
+        
+        #製作圖片
+        RichMenu = Image.new( "RGB", (2500,1631))#1631是原寬(1686) 減掉 一個空隙寬(55)，才會維持空隙相同
+        draw = ImageDraw.Draw(RichMenu) 
+        draw.rectangle([(0,0),(2500,1631)], fill="#865fbf")#整張塗紫
+        
+        
+        #插入Icon
+        ClickedIcon = ""
+        for m in range(0,2):#寬
+            for i in range(0,3):#長
+                IconTime = i + m*3
+                if times == IconTime:#做了第幾次，把第幾個作為Clicked
+                    name = "Clicked__" + pictures[IconTime]
+                    ClickedIcon = pictures[IconTime]
+                else:
+                    name = "CantClick__" + pictures[IconTime]
+            
+                file_path = "C:/LineBot/" + name + ".png"
+                Parts = Image.open(file_path)
+            
+                #不會有UnClick問題，可簡化
+                RichMenu.paste(Parts,(55 + 815*i,55 + 788*m))
+                    
+        RichMenu.show()
+        if ClickedIcon[-4:] == "Back":#Back系列已有RichMenuName，不重複
+            newRMname = ClickedIcon + "Clicked"
+        else:
+            newRMname = RichMenuName + ClickedIcon + "Clicked"
+        
+        RichMenu.save("RichMenu_%s.png"%newRMname,quality=100)
+        config.add_section("RM_%s"%newRMname)#紀錄RichMenu名
+        print("fin save and Make %s"%newRMname)
+
+
+        #輸入PostBack Data
+        DataArea = []
+        for m in range(0,2):#寬
+            for i in range(0,3):
+                DataArea.append({
+                                "bounds": {"x": 30 + 815*i, "y": 30 + 788*m, "width": 785, "height": 758},
+                                "action": {"type": "postback","data":"0"}#空的(data必須塞東西，所以放0)
+                                })
+                config.set("RM_%s"%newRMname, "data%i"%(i+m*3), "0")#紀錄Data
+        print("fin inputData")
+                
+               
+        #申請RichMenu Id
+        line_bot_api = LineBotApi('Y1LzBKoQn1WIslXTVLvfku5NiET/BVnwbgmrapIitiQ67UGJziyQuj4ZJqs24SMrQodeJO6cqVqKxZ43pfebDgzuQ0KkOtM/Oyp5E9BytIJqTZNbpNXNB6rODPyYhfXFcyO2Q1rnhZTp5jhhVpvo0gdB04t89/1O/w1cDnyilFU=')#放channel_access_token
+        headers = {"Authorization":"Bearer Y1LzBKoQn1WIslXTVLvfku5NiET/BVnwbgmrapIitiQ67UGJziyQuj4ZJqs24SMrQodeJO6cqVqKxZ43pfebDgzuQ0KkOtM/Oyp5E9BytIJqTZNbpNXNB6rODPyYhfXFcyO2Q1rnhZTp5jhhVpvo0gdB04t89/1O/w1cDnyilFU=","Content-Type":"application/json"}
+        
+        body = {
+            "size": {"width": 2500, "height": 1631},
+            "selected": "true",
+            "name": "我是功能選單",
+            "chatBarText": "點我開關選單",
+            "areas":DataArea
+          }
+        
+        req = requests.request('POST', 'https://api.line.me/v2/bot/richmenu', 
+                               headers=headers,data=json.dumps(body).encode('utf-8'))
+        print(req.text)
+        Id = req.text[15:].rstrip("\"}")#get RichMenu Id
+        config.set("RM_%s"%newRMname, "Id", Id)#紀錄Id
+        
+        #設定+紀錄RichMenu
+        with open("RichMenu_%s.png"%newRMname, 'rb') as f:
+            line_bot_api.set_rich_menu_image(Id, "image/png", f)
+            
+        curpath = os.path.dirname(os.path.realpath(__file__))#找到此檔位於的路徑
+        cfgpath = os.path.join(curpath, 'config.ini')#找到在路徑中也有的config.ini，用/連在一起
+        config.write(open(cfgpath, "w"))
+        print("fin Making %s"%newRMname)
+
+    print("ALL CLEAR")    
+    sys.exit()#全部完成，結束程式
+
+
+
+
+
+
+#準備記錄檔
+config = configparser.ConfigParser()
+config.read('config.ini',encoding='utf-8')
+
+#製作圖片
+RichMenu = Image.new( "RGB", (2500,1631))#1631是原寬(1686) 減掉 一個空隙寬(55)，才會維持空隙相同
+draw = ImageDraw.Draw(RichMenu) 
+draw.rectangle([(0,0),(2500,1631)], fill="#865fbf")#整張塗紫
+
+UnClickNum = []
+for m in range(0,2):#寬
+    for i in range(0,3):#長
+        file_path = filedialog.askopenfilename()#get file path
+        Parts = Image.open(file_path)
+        PartsName = Parts.filename.lstrip("C:/LineBo")#get Parts名字
+        PartsName = PartsName.lstrip("t/")#lstrip是從右邊數來，只要有在指定字串中有出線的字元，就會被刪掉，刪到沒出現1次為止，所以不這樣寫了話Clicked的C會被刪除
+        if PartsName[0:4] == "Rich":#速成模式
+            isOK = input("速成Clicked(Y/N)?")
+            if (isOK ==  "N" ) or (isOK == "n"):
+                sys.exit()#結束程式
+            else:
+                SpeedMakingClicked(PartsName.rstrip("png").rstrip(".").lstrip("RichMenu").lstrip("_"))
+        elif PartsName[0:7] == "UnClick":#Unclick 要禿出來
+            RichMenu.paste(Parts,(30 + 815*i,30 + 788*m))#788是原寬(843) 減掉 一個空隙寬(55)，才會維持空隙相同
+            UnClickNum.append(PartsName.rstrip(".").rstrip("png"))#紀錄UnClick的Parts(沒有UnClick就不用輸PostBack)
+        else:
+            RichMenu.paste(Parts,(55 + 815*i,55 + 788*m))
+        print(PartsName)
+
+RichMenu.show()
+isOK = input("OK(Y/N)?")
+if (isOK ==  "N" ) or (isOK == "n"):
+    sys.exit()#結束程式
+else:
+    name = input("Name?")
+    RichMenu.save("RichMenu_%s.png"%name,quality=100)
+    config.add_section("RM_%s"%name)#紀錄RichMenu名
+    print("fin save and Make Picture")
+    
+    #輸入PostBack Data
+    DataArea = []
+    for m in range(0,2):#寬
+        for i in range(0,3):
+            if i in UnClickNum:#要輸入PostBack，其他就不用了(但RichMenu不能沒有area，所以仍要加東西)
+                BackData = input("data%i?"%i)
+                DataArea.append({
+                                "bounds": {"x": 30 + 815*i, "y": 30 + 788*m, "width": 785, "height": 758},
+                                "action": {"type": "postback","data":BackData}
+                                })
+                config.set("RM_%s"%name, "data%i"%(i+m*3), BackData)#紀錄Data
+            else:
+                DataArea.append({
+                                "bounds": {"x": 30 + 815*i, "y": 30 + 788*m, "width": 785, "height": 758},
+                                "action": {"type": "postback","data":"0"}#空的(data必須塞東西，所以放0)
+                                })
+                config.set("RM_%s"%name, "data%i"%(i+m*3), "0")#紀錄Data
+    print("fin inputData")
+            
+           
+    #申請RichMenu Id
+    line_bot_api = LineBotApi('Y1LzBKoQn1WIslXTVLvfku5NiET/BVnwbgmrapIitiQ67UGJziyQuj4ZJqs24SMrQodeJO6cqVqKxZ43pfebDgzuQ0KkOtM/Oyp5E9BytIJqTZNbpNXNB6rODPyYhfXFcyO2Q1rnhZTp5jhhVpvo0gdB04t89/1O/w1cDnyilFU=')#放channel_access_token
+    headers = {"Authorization":"Bearer Y1LzBKoQn1WIslXTVLvfku5NiET/BVnwbgmrapIitiQ67UGJziyQuj4ZJqs24SMrQodeJO6cqVqKxZ43pfebDgzuQ0KkOtM/Oyp5E9BytIJqTZNbpNXNB6rODPyYhfXFcyO2Q1rnhZTp5jhhVpvo0gdB04t89/1O/w1cDnyilFU=","Content-Type":"application/json"}
+    
+    body = {
+        "size": {"width": 2500, "height": 1631},
+        "selected": "true",
+        "name": "我是功能選單",
+        "chatBarText": "點我開關選單",
+        "areas":DataArea
+      }
+    
+    req = requests.request('POST', 'https://api.line.me/v2/bot/richmenu', 
+                           headers=headers,data=json.dumps(body).encode('utf-8'))
+    print(req.text)
+    Id = req.text[15:].rstrip("\"}")#get RichMenu Id
+    config.set("RM_%s"%name, "Id", Id)#紀錄Id
+    
+    #設定+紀錄RichMenu
+    with open("RichMenu_%s.png"%name, 'rb') as f:
+        line_bot_api.set_rich_menu_image(Id, "image/png", f)
+        
+    curpath = os.path.dirname(os.path.realpath(__file__))#找到此檔位於的路徑
+    cfgpath = os.path.join(curpath, 'config.ini')#找到在路徑中也有的config.ini，用/連在一起
+    config.write(open(cfgpath, "w"))
+    print("fin Making")
+
+
+

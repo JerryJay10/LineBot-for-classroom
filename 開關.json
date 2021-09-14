@@ -1,0 +1,52 @@
+{
+  "type": "bubble",
+  "body": {
+    "type": "box",
+    "layout": "vertical",
+    "contents": [
+      {
+        "type": "text",
+        "text": "\u3106-2.\u5ee3\u64ad\u958b\u95dc",
+        "size": "md",
+        "weight": "bold"
+      },
+      {
+        "type": "box",
+        "layout": "horizontal",
+        "contents": [
+          {
+            "type": "text",
+            "text": "\u73fe\u72c0 : \u958b\u555f",
+            "weight": "bold",
+            "size": "md",
+            "gravity": "center",
+            "color": "#0000ff"
+          },
+          {
+            "type": "button",
+            "action": {
+              "type": "postback",
+              "label": "Switch",
+              "data": "BroadcastPowerSwitch"
+            },
+            "style": "primary",
+            "height": "sm"
+          }
+        ]
+      },
+      {
+        "type": "separator",
+        "margin": "md"
+      },
+      {
+        "type": "button",
+        "action": {
+          "type": "postback",
+          "label": "\u7d50\u675f\u8a2d\u5b9a",
+          "data": "BroadcastEditEnd"
+        },
+        "height": "sm"
+      }
+    ]
+  }
+}

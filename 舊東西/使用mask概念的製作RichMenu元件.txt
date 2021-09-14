@@ -1,0 +1,52 @@
+from glob import glob
+from os.path import splitext
+from PIL import Image,ImageDraw
+
+IconList = glob( "要合成的Icon/*.png" )#get路徑中所有png(*為萬用字元)
+BGList = glob( "被合成的Icon背景/*.png" )
+
+for png in IconList:
+    Icon = Image.open(png)
+    IconName = Icon.filename.lstrip("要合成的Icon\\")
+    for BGpath in BGList:
+        BG = Image.open(BGpath)
+        BGname = BG.filename.lstrip("被合成的Icon背景\\")#get BG名字
+             
+        
+        if BGname == "UnClickDemo.png":
+            newImage = BG.copy()#複製新的BG圖片，在新的圖片編輯
+            Icon = Icon.convert("RGBA")#RGBA模式貼上時才可一起放在mask區
+            newImage.paste(Icon,(49,36),Icon)
+            newImage.save("UnClick_%s"%IconName,quality=100)
+            print("fin UnClick")
+        elif BGname == "CantClickDemo.png":
+
+            newImage = BG.copy()#複製新的BG圖片，在新的圖片編輯
+            
+            Icon = Icon.convert("RGBA")#RGBA模式貼上時才可一起放在mask區
+            newImage.paste(Icon,(49,36),Icon)#先貼好原本樣子，再加mask
+            mask = Image.new( "L", (760,733))#建立空白圖片(模式:灰階模式(才可putalpha),大小760*733)
+            draw = ImageDraw.Draw(mask) 
+            draw.rectangle([(0,0),(760,733)], fill="#ffffff")#整張塗白
+            draw.rectangle([(49,36),(710,697)], fill="#d4d4d4")#在Icon位置填色(1.末位置xy座標要減1，才不會超出 2.顏色RGB要各減5，putalpha的色差就可以補正)
+            newImage.putalpha(mask)#蓋上mask(不知為何，處理完的圖片paste會回復原狀，所以只能最後再putalpha)
+           
+           
+            print("fin CantClick")
+
+        elif BGname == "ClickedDemo.png":
+            newImage = BG.copy()#複製新的BG圖片，在新的圖片編輯
+            Icon = Icon.convert("RGBA")#RGBA模式貼上時才可一起放在mask區
+            newImage.paste(Icon,(74,61),Icon)#先貼好原本樣子，再加mask
+        
+            mask = Image.new( "L", (760,733))#建立空白圖片(模式:灰階模式(才可putalpha),大小760*733)
+            draw = ImageDraw.Draw(mask) 
+            draw.rectangle([(0,0),(760,733)], fill="#ffffff")#整張塗白
+            draw.rectangle([(74,61),(735,722)], fill="#6f6f6f")#在Icon位置填色(1.末位置xy座標要減1，才不會超出 2.顏色RGB要各減17，putalpha的色差就可以補正)
+            newImage.putalpha(mask)#蓋上mask(不知為何，處理完的圖片paste會回復原狀，所以只能最後再putalpha)
+                        
+            RightCorner = Image.open("RightCorner.png")
+            newImage.paste(RightCorner,(701,675),RightCorner)#右下角在paste時會不見，要補回來(記得設定mask參數，不然透明處會黑掉)
+            
+            newImage.save("Clicked_%s"%IconName,quality=100)
+            print("fin Clicked")

@@ -1,0 +1,604 @@
+from flask import Flask, request, abort,render_template,redirect
+from linebot import LineBotApi, WebhookHandler
+from linebot.exceptions import InvalidSignatureError, LineBotApiError
+from linebot.models import MessageEvent, TextMessage, TextSendMessage,TemplateSendMessage,ButtonsTemplate,ConfirmTemplate,MessageTemplateAction,PostbackEvent,PostbackTemplateAction,CarouselTemplate,CarouselColumn,FlexSendMessage
+from oauth2client.service_account import ServiceAccountCredentials as SAC
+import sys
+import datetime
+import gspread
+import os
+import configparser
+import urllib
+import json
+import redis
+import time
+
+
+app = Flask(__name__)
+
+
+curpath = os.path.dirname(os.path.realpath(__file__))
+cfgpath = os.path.join(curpath, 'config.ini')
+# 取得config記事本裡的 LINE 聊天機器人基本資料
+config = configparser.ConfigParser()
+config.read('config.ini')
+
+line_bot_api = LineBotApi(config.get('line-bot','channel_access_token'))
+handler = WebhookHandler(config.get('line-bot','channel_secret'))
+user_id = config.get("user_id","Bot")
+
+# 接收 LINE 的資訊
+@app.route("/callback", methods=['POST'])
+def callback():
+    signature = request.headers['X-Line-Signature']
+
+    body = request.get_data(as_text=True)
+    app.logger.info("Request body: " + body)
+
+    try:
+        print(body, signature)
+        handler.handle(body, signature)
+        
+    except InvalidSignatureError:
+        abort(400)
+
+    return 'OK'
+
+
+#Line Notify第一階段，產生授權網址
+client_id = "4XVFGLChmjufoud813nheA"
+client_secret = 'YJ9LmymadKN5AOmU85u7DY0gOayv0jsZYfBW6jOnmpP'
+redirect_uri = "https://linebot21310.herokuapp.com/callback/notify"
+
+def create_auth_link(Id, client_id=client_id, redirect_uri=redirect_uri):
+    data={
+        'response_type': 'code', 
+        'client_id': client_id, 
+        'redirect_uri': redirect_uri, 
+        'scope': 'notify', 
+        'state': Id#此可為任何資料([]的資料不行，不知原因)，此處用於船user_id
+        }
+    query_str = urllib.parse.urlencode(data)
+    return f'https://notify-bot.line.me/oauth/authorize?{query_str}'
+
+#Line Notify第二，三階段，使用者完成授權網址的連動後，LINE Notify 會將 Code 和 State 等資料與使用者送到 Redirect URI，也就是此函式
+@app.route("/callback/notify", methods=['GET'])
+def callback_nofity():
+    assert request.headers['referer'] == 'https://notify-bot.line.me/'#確認是從 LINE Notify 發送過來的資料
+    code = request.args.get('code')#Get code
+    Id = request.args.get('state')#get state(user_id)
+    
+    # 第三階段函式(用code去get access_token)
+    access_token = get_token(code)#其他三項已有，只要code就好
+
+    
+
+
+    #StoreToken
+    if Id[0] == "U":#註冊User
+        rds.hset("user:%s"%Id,"access_token",access_token)      
+        send_message(access_token, "設定完成LineNotify了!!!")#這裡如果Notify已有加入群組，群組又被選到，就會發訊，我想不到更好的方法，只能等全班註冊完再加到班群
+        send_message(access_token, "給你一個讚!")
+        time.sleep(2)
+        actList = [PostbackTemplateAction(label='有的!',text='有!',data='start&Notify&YES') , PostbackTemplateAction(label='沒有耶...',text='沒',data='start&Notify&NO')] 
+        line_bot_api.push_message(Id,TemplateSendMessage(alt_text='有收到LineNotify的讚嗎?',template=ConfirmTemplate(text="5.有收到LineNotify的讚嗎?",actions = actList)))#alt_text也會出現在跳出的視窗，所以必須改
+        rds.hset("user:%s"%Id,"step",5)#前進一步
+        return '<h1>恭喜完成 LINE Notify 連動！請關閉此視窗。</h1>'#使用者會看到的網頁
+    else:#註冊group#只有作者才可拿到註冊Group的Link
+        summary = line_bot_api.get_group_summary(Id)
+    
+        things = {
+        "access_token":access_token,
+        "name":summary.group_name
+        } 
+        rds.hmset("group",things)
+        send_message(access_token, "全部人都註冊完了!謝謝大家的配合!\n我可以正式上工了!")
+        return '<h1>恭喜完成 LINE Notify Group連動！請關閉此視窗。</h1>'#使用者會看到的網頁
+
+    
+
+#Line Notify第三階段，用code去get access_token
+def get_token(code, client_id=client_id, client_secret=client_secret, redirect_uri=redirect_uri):
+    url = 'https://notify-bot.line.me/oauth/token'
+    headers = { 'Content-Type': 'application/x-www-form-urlencoded' }
+    data = {
+        'grant_type': 'authorization_code',
+        'code': code,
+        'redirect_uri': redirect_uri,
+        'client_id': client_id,
+        'client_secret': client_secret
+        }
+    data = urllib.parse.urlencode(data).encode()#把所有需要data準備好
+    req = urllib.request.Request(url, data=data, headers=headers)#傳送資料到 LINE Notify
+    page = urllib.request.urlopen(req).read()#讀取 LINE Notify 回傳的資料
+    
+    res = json.loads(page.decode('utf-8'))#回傳的資料用json.loads轉換為字典物件
+    return res['access_token']#讀取字典其中一個key(access_token)
+
+#Line Notify第四階段，有access_token就可以傳訊息了
+def send_message(access_token, text_message):
+    url = 'https://notify-api.line.me/api/notify'
+    headers = {"Authorization": "Bearer "+ access_token}
+
+    data = {'message': text_message}#Line Notify必須傳文字訊息，所以"message"必須有
+
+    data = urllib.parse.urlencode(data).encode()
+    req = urllib.request.Request(url, data=data, headers=headers)
+    page = urllib.request.urlopen(req).read()
+
+
+
+#設定redis物件
+rds = redis.Redis(
+host = config.get('redis','host'),
+port = int(config.get('redis','port')),
+password = config.get('redis','password')
+)
+
+#set 資料(存於redis中)
+if rds.exists("DoReport") == False:
+    rds.set("DoReport",1)#0是False
+if rds.exists("StartSetting") == False:
+    rds.set("StartSetting",1)#0是False
+if rds.exists("UnRegisterUser") == False:
+   for i in range(1,45):
+        rds.rpush("UnRegisterUser",i)
+   rds.rpush("UnRegisterUser","師")
+if rds.exists("MiuseCommand") == False:
+   for i in range(1,45):
+       rds.rpush("MiuseCommand",str(i)+"扣")
+if rds.exists("PlusCommand") == False:
+   for i in range(1,45):
+       rds.rpush("PlusCommand",str(i)+"加")
+    
+
+   
+        
+
+#設定google sheet
+GDriveJSON = 'mabolinebotcleaningdos-03637c02e1e7.json'#GDriveJSON就輸入下載下來Json檔名稱
+GSpreadSheet = '馬波的LineBot分數表' #GSpreadSheet是google試算表名稱
+
+scope = ['https://www.googleapis.com/auth/drive']#定義存取的Scope(範圍)，也就是Google Sheet
+key = SAC.from_json_keyfile_name(GDriveJSON, scope)
+gc = gspread.authorize(key)
+worksheet = gc.open(GSpreadSheet).sheet1#sheet1指第一個sheey
+
+
+    
+StartMessage = "你好!我是馬波的Line機器人，目前只有兩項功能:\n1.提醒打掃和午睡時間\n2.計分系統(Beta版)\n\n為了讓我順利工作還不用薪水(還有讓作者偷懶)，拜託拜託幫我做下面的動作，誠實不亂回答，我承受不了亂試的，拜託配合了!!\nA.Line Notify連動\n\t1.點下面的連結(作者不會寫病毒，請安心)\n\t2.選擇「透過 1 對 1 聊天接收 LINE Notify 通知」然後按「同意並連動」\n\t3.從Line Noitfy收到「設定完成LineNotify了!!!」就完成啦\nB.紀錄號碼\n\t1.請告訴我你是幾號(老師不用)\n\tEx:你是22號，就傳「22」\n\t2.如果你是打掃三股長請告訴我\n\tEx:你是環保股長，就傳「我是環保」(老師就傳「我是老師」)\nPs.請傳的格式保持一致，有問題或bug要回報喔\nPs2.我晚上12-7點要睡覺，不要在這時候使用服務喔\n\nLine Notify連結:\n"
+
+@handler.add(MessageEvent, message=TextMessage)# 在此接收訊息事件，回傳值事件(postback)要在下面DataReply接收
+def reply(event):
+    try:
+        group_id = event.source.group_id
+        user_id = event.source.user_id
+    except:
+        user_id = event.source.user_id
+    
+    NowTime = datetime.datetime.now()   #get現在時間
+    ReplyText = event.message.text    
+   
+    if ReplyText == "設定開始!!":#註冊Start
+        rds.set("Author_Id",user_id)
+        rds.hset("group","group_id",group_id)
+        FlexMessage = json.load(open('座號選擇.json','r',encoding='utf-8'))
+        line_bot_api.reply_message(event.reply_token, FlexSendMessage('profile',FlexMessage))
+            
+    if ReplyText == "確認註冊情形":
+        finalword = ""
+        if rds.exists("Cleaning_Id"):
+            cleaning_id = "打掃三股長user_id="+str(rds.lrange("Cleaning_Id", 0, -1))
+            finalword = finalword + cleaning_id+"\n"
+            tokens=[]
+            for i in rds.lrange("Cleaning_Id", 0, -1):
+                Id = i.decode("utf-8")
+                if rds.hexists("user:%s"%Id,"access_token"):
+                    tokens.append(rds.hmget("user:%s"%Id,"access_token")[0].decode('utf-8'))
+            cleaning_token = "打掃三股長access_token="+str(tokens)
+            finalword = finalword + cleaning_token+"\n\n"
+              
+        if rds.exists("Teacher_Id"):
+            teacher_id = "老師user_id="+str(rds.lrange("Teacher_Id", 0, -1))
+            finalword = finalword + teacher_id+"\n"
+            tokens=[]
+            for i in rds.lrange("Teacher_Id", 0, -1):
+                Id = i.decode("utf-8")
+                if rds.hexists("user:%s"%Id,"access_token"):
+                    tokens.append(rds.hmget("user:%s"%Id,"access_token")[0].decode('utf-8'))
+            teacher_token = "老師access_token="+str(tokens)
+            finalword = finalword + teacher_token+"\n\n"
+        
+        student_word = ""
+        for i in range(1,45):
+            if rds.hexists("Number_Id", str(i)):
+                student_id = rds.hmget("Number_Id", str(i))[0].decode('utf-8')
+                student_word = student_word + "%i號user_id="%i + student_id +"\n"
+                if rds.hexists("user:%s"%student_id,"access_token"):
+                    student_token = rds.hmget("user:%s"%student_id,"access_token")[0].decode('utf-8')
+                    student_word = student_word + "%i號access_token="%i + student_token +"\n"
+        student_word = student_word.rstrip()
+        finalword = finalword + student_word
+            
+        line_bot_api.reply_message(event.reply_token,TextSendMessage("結果如下:\n"+finalword))
+    
+    
+    
+    #加扣分系統
+    #if rds.llen("UnRegisterUser") == 0:#FinishSetting了才給用  
+    if rds.hexists("ReportCleaningLevel",user_id):#exists就是未回報的股長
+        level = rds.hmget("ReportCleaningLevel", user_id)[0].decode("utf-8")
+       
+        if level == "0":
+            if ReplyText == "有":
+                rds.hset("ReportCleaningLevel", user_id,"1")
+                line_bot_api.reply_message(event.reply_token,TextSendMessage("何人如此大膽??報上名來!!\nEx:10,20,30號沒打掃，就報上「10,20,30」(逗號要英文逗號喔!)"))
+            elif ReplyText == "沒有":
+                 rds.hdel("ReportCleaningLevel",user_id)
+                 line_bot_api.reply_message(event.reply_token,TextSendMessage("很好，大家都很乖，辛苦你了"))
+            else:
+                 line_bot_api.reply_message(event.reply_token,TextSendMessage("我只收「有」或「沒有」喔!!好好照格式回答啦!"))
+        elif level == "1":
+            try:
+                tryingText = int(ReplyText.replace(",",""))#只有符合格式的訊息才可行
+                
+                leftScore =""
+                for i in ReplyText.split(","):
+                    ExcelNum = int(i) + 1#1號在B2格
+                    newScore = int(worksheet.get("B%i"%ExcelNum).first()) - 1#算分(worksheet.get("B%i"%ExcelNum).first()得到的是字串喔)
+                    worksheet.update("B%i"%ExcelNum,newScore)#改分數            
+                    leftScore = leftScore + "%s號剩下%s分"%(i,worksheet.get("B%i"%ExcelNum).first()) + "\n"
+                leftScore = leftScore.rstrip()        
+                rds.hdel("ReportCleaningLevel",user_id)
+                line_bot_api.reply_message(event.reply_token,TextSendMessage("扣好了!辛苦了!\n\n被扣的人如下:\n"+leftScore+"\n\n不小心扣錯記得有「(號碼)加」可以修改喔!!"))
+            except:
+                line_bot_api.reply_message(event.reply_token,TextSendMessage("我只收「(號碼),(號碼),...,(號碼)」喔!!好好照格式回答啦!"))
+        else:
+            print("impossile!")
+    
+   
+    if bytes(ReplyText,"utf-8") in rds.lrange("MiuseCommand", 0, -1) :#扣分
+        if bytes(user_id,"utf-8") in rds.lrange("Cleaning_Id", 0, -1):#確認為三股長
+            num = int(ReplyText.rstrip("扣"))    
+            ExcelNum = num + 1#1號在B2格
+            newScore = int(worksheet.get("B%i"%ExcelNum).first()) - 1#算分(worksheet.get("B%i"%ExcelNum).first()得到的是字串喔)
+            worksheet.update("B%i"%ExcelNum,newScore)#改分數
+            
+            line_bot_api.reply_message(event.reply_token,TextSendMessage("很會舉一反三嘛~但是還是準時回報比較好喔!\n\n好了!%i號剩下%s分瞜!"%(num,worksheet.get("B%i"%ExcelNum).first())))
+        else:
+            line_bot_api.reply_message(event.reply_token,TextSendMessage("不是股長別亂傳!!不乖!"))
+    if bytes(ReplyText,"utf-8") in rds.lrange("PlusCommand", 0, -1) :#加分
+        if bytes(user_id,"utf-8") in rds.lrange("Cleaning_Id", 0, -1):#確認為三股長
+            num = int(ReplyText.rstrip("加"))    
+            ExcelNum = num + 1#1號在B2格
+            newScore = int(worksheet.get("B%i"%ExcelNum).first()) + 1#算分
+            worksheet.update("B%i"%ExcelNum,newScore)#改分數
+            
+            line_bot_api.reply_message(event.reply_token,TextSendMessage("加好分了!\n%i號有%s分瞜!"%(num,worksheet.get("B%i"%ExcelNum).first())))
+        else:
+            line_bot_api.reply_message(event.reply_token,TextSendMessage("不是股長別亂傳!!不乖!"))
+    if ReplyText == "確認大家分數":
+        student_score = ""
+        for i in range(1,45):
+            ExcelNum = i + 1#1號在B2格
+            Score = worksheet.get("B%i"%ExcelNum).first()
+            student_score = student_score + "%i號有 "%i + Score +" 分\n"
+        student_score = student_score.rstrip()
+        line_bot_api.reply_message(event.reply_token,TextSendMessage("大家分數如下:\n"+student_score+"\n\n附贈的PDF檔:\nhttps://docs.google.com/spreadsheets/d/1b6194F3pdREAPMN894laYov0PV_z0sBKUKHZ_y_q83c/export?format=pdf"))
+        
+        
+    
+    if ReplyText == "開始提醒":
+        if bytes(user_id,"utf-8") in rds.lrange("Author_Id", 0, -1):#確認為作者
+            line_bot_api.reply_message(event.reply_token,TextSendMessage("提醒功能啟動!!"))
+            rds.set("DoReport",1)
+    if ReplyText == "結束提醒":
+        if bytes(user_id,"utf-8") in rds.lrange("Author_Id", 0, -1):#確認為作者
+            line_bot_api.reply_message(event.reply_token,TextSendMessage("提醒功能結束"))
+            rds.set("DoReport",0)
+    
+    
+    
+
+             
+      
+    if ReplyText == "Test":              
+        print*("A")
+    if ReplyText == "ResetAll":              
+        rds.delete("user:%s"%user_id)
+        rds.delete("UnRegisterUser")
+        rds.delete("Cleaning_Id")
+        rds.delete("Teacher_Id")
+        rds.delete("Number_Id")
+        rds.delete("Group_Id")
+        line_bot_api.reply_message(event.reply_token,TextSendMessage("Fininsh Reset"))
+    if ReplyText == "GetLink":        
+        line_bot_api.reply_message(event.reply_token,TextSendMessage("temporary linkk:"+create_auth_link(user_id)))
+    if ReplyText == "Wonwon":      
+        line_bot_api.reply_message(event.reply_token,TextSendMessage("OK!"))
+        Wonwon(user_id,group_id)     
+        
+    if ReplyText == "Hour":
+        line_bot_api.reply_message(event.reply_token,TextSendMessage(NowTime.hour))
+    if ReplyText == "Minute":
+        line_bot_api.reply_message(event.reply_token,TextSendMessage(NowTime.minute))
+    if ReplyText == "Second":
+        line_bot_api.reply_message(event.reply_token,TextSendMessage(NowTime.second))
+ 
+   
+    
+
+@handler.add(PostbackEvent)# 回傳值事件在此接收
+def DataReply(event):
+    user_id = event.source.user_id  
+    ReplyData = event.postback.data
+    if ReplyData[0:3] == "del":#[0:3]指第0個起到第3個前#重新註冊
+        NowStep = rds.hget("user:%s"%user_id,"step").decode("utf-8")    
+        if ReplyData[4:9] == "start":
+            if NowStep == "7":#完成註冊才可用
+                actList = [PostbackTemplateAction(label='認真的',text='認真的。',data='del&do&YES') , PostbackTemplateAction(label='後悔了',text='我後悔了，沒事',data='del&do&NO')] 
+                line_bot_api.reply_message(event.reply_token,TemplateSendMessage(alt_text='快跟我說要不要重新註冊!!',template=ConfirmTemplate(text='8.你認真要重新註冊?',actions = actList)))
+                rds.hset("user:%s"%user_id,"step",8)#前進一步
+            else:
+                line_bot_api.reply_message(event.reply_token,TextSendMessage("%s"%ReplyWrongStep(NowStep)))
+        elif ReplyData[4:6] == "do":#刪除!!
+            if NowStep == "8":                
+                if ReplyData[7:10] == "YES":
+                    if rds.exists("Teacher_Id") and rds.get("Teacher_Id").decode("utf-8") == user_id:#是老師
+                        rds.delete("Teacher_Id")
+                        rds.rpush("UnRegisterUser","師")
+                    else:#同學
+                        num = rds.hget("user:%s"%user_id,"number").decode("utf-8")    
+                        rds.hdel("Number_Id", num)                                          
+                        if bytes(user_id,"utf-8") in rds.lrange("Cleaning_Id", 0, -1):
+                            rds.lrem("Cleaning_Id",0,user_id)
+                        rds.rpush("UnRegisterUser",num)
+                    rds.delete("user:%s"%user_id)
+                    rds.hset("user:%s"%user_id,"step",0)#避免此時以前的步驟被亂點
+                    
+                    line_bot_api.reply_message(event.reply_token, TextSendMessage("你的資料全部刪好了。重新再註冊一次吧!"))
+                    FlexMessage = json.load(open('座號選擇.json','r',encoding='utf-8'))
+                    line_bot_api.push_message(user_id, FlexSendMessage('profile',FlexMessage))
+                else:#No
+                     rds.hset("user:%s"%user_id,"step",7)#回到做完狀態
+                     line_bot_api.reply_message(event.reply_token, TextSendMessage("不用重新註冊!沒事就好 沒事就好"))
+            else:
+                line_bot_api.reply_message(event.reply_token,TextSendMessage("%s"%ReplyWrongStep(NowStep)))
+            
+                
+                
+    
+    elif ReplyData[0:5] == "start":#註冊
+        if rds.hexists("user:%s"%user_id,"step") == False:#步數設定(才不會以前的步驟被亂點)，做一次點擊就前進一步
+            rds.hset("user:%s"%user_id,"step",0)
+        
+        NowStep = rds.hget("user:%s"%user_id,"step").decode("utf-8")
+        if ReplyData[6:9] == "num":#第一步，號碼註冊   
+            if NowStep == "0":#步數確認(做完第0步)                
+                num = ReplyData[10:]
+                if bytes(num,"utf-8") in rds.lrange("UnRegisterUser", 0, -1):#是沒註冊號碼，發確認消息
+                    actList = [PostbackTemplateAction(label='YES',text='YES',data='start&ConfirmNum&YES&%s'%num) , PostbackTemplateAction(label='NO',text='NO',data='start&ConfirmNum&NO&%s'%num)] 
+                    if num == "師":
+                        line_bot_api.push_message(user_id, TemplateSendMessage(alt_text='我確認一下，你是老師嗎?',template=ConfirmTemplate(text='我確認一下，你是老師嗎?',actions = actList)))#alt_text不可省略
+                    else:
+                        line_bot_api.push_message(user_id, TemplateSendMessage(alt_text='我確認一下，你是%s號嗎?'%num,template=ConfirmTemplate(text='我確認一下，你是%s號嗎?'%num,actions = actList)))
+                    rds.hset("user:%s"%user_id,"step",1)#前進一步
+                else:#是已註冊號碼，提醒(不會前進一步)
+                    if num == "師":    
+                        HasGotUseid = rds.get("Teacher_Id").decode("utf-8")
+                        HasGotName = rds.hget("user:%s"%HasGotUseid,"name").decode("utf-8")
+                        line_bot_api.push_message(user_id, TextSendMessage("老師已被%s註冊走了，如果你是老師，就請他重新註冊吧!"%HasGotName,num))
+                    else:
+                        HasGotUseid = rds.hget("Number_Id",num).decode("utf-8")
+                        HasGotName = rds.hget("user:%s"%HasGotUseid,"name").decode("utf-8")
+                        line_bot_api.push_message(user_id, TextSendMessage("%s號已被%s註冊走了，如果%s是你的號碼，就請他重新註冊吧!"%(num,HasGotName,num)))               
+            else:
+                line_bot_api.push_message(user_id,TextSendMessage("%s"%ReplyWrongStep(NowStep)))
+        elif ReplyData[6:16] == "ConfirmNum":#第二步，確認號碼註冊正確+註冊好號碼，學號與名子        
+            if NowStep == "1":#步數確認(做完第1步)            
+                if ReplyData[17:20] == "YES":
+                    num = ReplyData[21:]
+                    if num == "師":
+                        userProfile = line_bot_api.get_profile(user_id)
+                        rds.set("Teacher_Id",user_id)
+                        rds.hset("user:%s"%user_id,"name",userProfile.display_name)
+                        
+                        rds.hset("user:%s"%user_id,"step",4)#跳到第4步
+                        line_bot_api.reply_message(event.reply_token,TextSendMessage("4.(跳過2,3)修改完成!!\n老師，只要再連動Line Notify就註冊好瞜!步驟如下:\n\t1.點下面的連結\n\t2.選擇「透過 1 對 1 聊天接收 LINE Notify 通知」然後按「同意並連動」\n\t3.從Line Noitfy收到「設定完成LineNotify了!!!」就完成啦\n\n網址:"+create_auth_link(user_id)))
+                    else:                   
+                        userProfile = line_bot_api.get_profile(user_id)
+                        rds.hset("Number_Id",num,user_id)
+                        rds.hset("user:%s"%user_id,"name",userProfile.display_name)
+                        rds.hset("user:%s"%user_id,"number",num)
+                        
+                        actList = [PostbackTemplateAction(label='O',text='O',data='start&Clean&YES') , PostbackTemplateAction(label='X',text='X',data='start&Clean&NO')] 
+                        line_bot_api.reply_message(event.reply_token,TemplateSendMessage(alt_text='快跟我說你是不是打掃股長!!',template=ConfirmTemplate(text='2.我知道了，你是%s號\n那，你是環保、衛生或服務嗎?'%num,actions = actList)))
+                        rds.hset("user:%s"%user_id,"step",2)#前進一步
+                else:#No
+                    line_bot_api.reply_message(event.reply_token,TextSendMessage("好喔，取消註冊。\n記得再重頭(第0步)註冊一次喔!"))
+                    rds.hset("user:%s"%user_id,"step",0)#回到第0步
+            else:
+                line_bot_api.reply_message(event.reply_token,TextSendMessage("%s"%ReplyWrongStep(NowStep)))
+        elif ReplyData[6:11] == "Clean":#第三步，傳送確認股長註冊正確
+            if NowStep == "2":#步數確認(做完第2步)        
+                if ReplyData[12:] == "YES":
+                     actList = [PostbackTemplateAction(label='YES!',text='YES!YES!YES!',data='start&ConfirmClean&YES') , PostbackTemplateAction(label='NO!',text='NO!NO!NO!',data='start&ConfirmClean&NO')] 
+                     line_bot_api.reply_message(event.reply_token,TemplateSendMessage(alt_text='快跟我說你是不是打掃股長!!',template=ConfirmTemplate(text='3.所以，你「是」打掃相關股長，醬是對的嗎?',actions = actList)))
+                else:#No
+                     actList = [PostbackTemplateAction(label='YES!',text='YES!YES!YES!',data='start&ConfirmClean&NO') , PostbackTemplateAction(label='NO!',text='NO!NO!NO!',data='start&ConfirmClean&YES')] 
+                     line_bot_api.reply_message(event.reply_token,TemplateSendMessage(alt_text='快跟我說你是不是打掃股長!!',template=ConfirmTemplate(text='3.所以，你「不是」打掃相關股長，醬是對的嗎?',actions = actList)))
+                rds.hset("user:%s"%user_id,"step",3)#前進一步
+            else:
+                line_bot_api.reply_message(event.reply_token,TextSendMessage("%s"%ReplyWrongStep(NowStep)))
+        elif ReplyData[6:18] == "ConfirmClean":#第四步，確認股長註冊正確 + 註冊完股長 + LineNotify
+            if NowStep == "3":#步數確認(做完第3步)        
+                if ReplyData[19:] == "YES":
+                    rds.rpush("Cleaning_Id",user_id)
+                    line_bot_api.reply_message(event.reply_token,TextSendMessage("4.好!打掃股長註冊完成!!\n只要再連動Line Notify就註冊好瞜!步驟如下:\n\t1.點下面的連結\n\t2.選擇「透過 1 對 1 聊天接收 LINE Notify 通知」然後按「同意並連動」\n\t3.從Line Noitfy收到「設定完成LineNotify了!!!」就完成啦\n\n網址:"+"https://linebot21310.herokuapp.com/CheckNotify/%s"%user_id))#去確認步數             
+                else:#No
+                    line_bot_api.reply_message(event.reply_token,TextSendMessage("4.好!不用註冊打掃股長了。\n那只要再連動Line Notify就註冊好瞜!步驟如下:\n\t1.點下面的連結\n\t2.選擇「透過 1 對 1 聊天接收 LINE Notify 通知」然後按「同意並連動」\n\t3.從Line Noitfy收到「設定完成LineNotify了!!!」就完成啦\n\n網址:"+"https://linebot21310.herokuapp.com/CheckNotify/%s"%user_id))
+                rds.hset("user:%s"%user_id,"step",4)#前進一步
+            else:
+                line_bot_api.reply_message(event.reply_token,TextSendMessage("%s"%ReplyWrongStep(NowStep)))
+        elif ReplyData[6:12] == "Notify":#第五步，LineNotify確認(因為LineNotify的accessToken無規律，LineBot也看不到Notify的訊息，無法確認是否正確註冊到一對一，所以只好人工確認)
+            if NowStep == "5":#步數確認(做完第5步)  
+                if ReplyData[13:] == "YES":
+                    actList = [PostbackTemplateAction(label='有啦!',text='有 有 有啦!',data='start&ConfirmNotify&YES') , PostbackTemplateAction(label='沒有啦..',text='其實沒有啦...',data='start&ConfirmNotify&NO')] 
+                    line_bot_api.reply_message(event.reply_token,TemplateSendMessage(alt_text='快跟我說有沒有收到LineNotify的讚!!',template=ConfirmTemplate(text='6.你真的有收到我用LineBotify發的「給你一個讚!」嗎?',actions = actList)))
+                    rds.hset("user:%s"%user_id,"step",6)#前進一步
+                else:#No
+                    line_bot_api.reply_message(event.reply_token,TextSendMessage("我已經發了耶...，有可能是因為在註冊LineNotify時沒選到「透過 1 對 1 聊天接收 LINE Notify 通知」，選到群組了，再點一次連結吧(第4步)!記得是選「透過 1 對 1 聊天接收 LINE Notify 通知」喔!"))
+                    rds.hset("user:%s"%user_id,"step",4)#回到第4步
+            else:
+                line_bot_api.reply_message(event.reply_token,TextSendMessage("%s"%ReplyWrongStep(NowStep)))
+        elif ReplyData[6:19] == "ConfirmNotify":#第六步，註冊完成 + 確認資料正確 + 重新註冊
+            if NowStep == "6":#步數確認(做完第6步)  
+                if ReplyData[20:] == "YES":
+                    if rds.exists("Teacher_Id") and user_id == rds.get("Teacher_Id").decode("utf-8"):#是老師#沒exists就不會執行get，避免出錯
+                        num = "老師"
+                        rds.lrem("UnRegisterUser",0,"師")
+                    else:
+                        num = rds.hget("user:%s"%user_id,"number").decode("utf-8")
+                        rds.lrem("UnRegisterUser",0,num)
+                        
+                    if rds.exists("Cleaning_Id") and bytes(user_id,"utf-8") in rds.lrange("Cleaning_Id", 0, -1):
+                        isClean = "是"
+                    else:
+                        isClean = "否"
+                    if rds.hexists("user:%s"%user_id,"access_token"):
+                        HasNotify = "已註冊"
+                    else:
+                        HasNotify ="未註冊"
+                    actList = [PostbackTemplateAction(label='重新註冊(長存)',text='我要重新註冊',data='del&start')]
+                    line_bot_api.push_message(user_id,TextSendMessage("謝謝你的配合!!最後，請確認你的資料是否正確:\n\n\t座號(老師):%s\n\t打掃股長:%s\n\tLineNotify:%s\n\n如果有錯，請點下面的重新註冊鈕，沒錯就全部註冊完了，謝謝你的配合!!"%(num,isClean,HasNotify)))
+                    line_bot_api.reply_message(event.reply_token,TemplateSendMessage(alt_text='註冊完了!!',template=ButtonsTemplate(title="7.註冊完了!!",text='需要重新註冊來這~',actions = actList)))#text有字數限制，在這裡做JSON檔太麻煩了，只好push Message       
+                    rds.hset("user:%s"%user_id,"step",7)#道第7步(完成步)
+                    
+                    if rds.llen("UnRegisterUser") == 0:#全部人註冊完了，註冊Group時間(請先加入群組再註冊)
+                        Author_id = rds.get("Author_Id").decode("utf-8")
+                        group_id = rds.hget("group","group_id")
+                        line_bot_api.push_message(Author_id,TextSendMessage("Group_link:"+create_auth_link(group_id)))
+                else:#No
+                     line_bot_api.reply_message(event.reply_token,TextSendMessage("我已經發了耶...，有可能是因為在註冊LineNotify時沒選到「透過 1 對 1 聊天接收 LINE Notify 通知」，選到群組了，再點一次連結吧!記得是選「透過 1 對 1 聊天接收 LINE Notify 通知」喔!"))
+                     rds.hset("user:%s"%user_id,"step",4)#回到第4步
+            else:
+                line_bot_api.reply_message(event.reply_token,TextSendMessage("%s"%ReplyWrongStep(NowStep)))
+                
+@app.route("/CheckNotify/<user_id>")#因為網址是傳出去就固定，在Line方面用Button或函式分類，最後仍要傳網址，就可能被重複點擊，所以只能在網路連結後做分類，符合者再重新導向
+def CheckNotify(user_id):
+    step = rds.hget("user:%s"%user_id,"step").decode("utf-8")
+    if  step == "4":#步數確認(做完第4步)，等註冊好Notify才可以前進一步
+        return redirect(create_auth_link(user_id))#LineNotify註冊
+    else:
+        return "<h1>%s<h1>"%ReplyWrongStep(step)
+    
+def ReplyWrongStep(step):
+    if step != "7":
+        return "你應該做第%s步才對!!請照順序回答我!!"%step
+    else:
+        return "想試試看會發生甚麼事對不對? 才 不 給 你玩!!"
+
+
+
+
+def CleaningCheckOn():
+    for i in rds.lrange("Cleaning_Id", 0, -1):
+        cleanId = i.decode("utf-8")
+        rds.hset("ReportCleaningLevel",cleanId,"0")#0->未回報,1->回報1次,完成回報就刪掉
+        line_bot_api.push_message(cleanId,TextSendMessage("回報時間到瞜!\n有人沒打掃嗎?(請回答「有」或「沒有」)"))#只有LineBot會讀訊息
+
+
+def CleaningCheckOff():
+    for i in rds.lrange("Cleaning_Id", 0, -1):
+        cleanId = i.decode("utf-8")
+        
+        if rds.hexists("ReportCleaningLevel",cleanId):
+            line_bot_api.push_message(cleanId,TextSendMessage("已讀我!!\n這次不讓你回報了啦!!\n下次注意點~"))
+            
+            rds.hdel("ReportCleaningLevel",cleanId)
+
+
+#每一秒呼叫Wonwon()
+def Wonwon(user_id,group_id): 
+    access_token = rds.hmget("user:%s"%user_id,"access_token")[0].decode('utf-8')#hmget出的是列表的byte，要編譯回utf-8 + 取第0個才可
+    
+    i = 0
+    startTime = datetime.datetime.now()
+    
+    while i<= 2:
+        NowTime = datetime.datetime.now()
+        CalCulTime = NowTime.second - startTime.second
+        if CalCulTime>=1 or CalCulTime<=-59:
+            send_message(access_token, "wonwon!")
+            line_bot_api.push_message(user_id,TextSendMessage("won"))
+            i = i+1
+            startTime = datetime.datetime.now()
+        else:
+             continue
+    access_token = rds.hmget("group","access_token")[0].decode('utf-8')
+    send_message(access_token, "finish!")
+    line_bot_api.push_message(group_id,TextSendMessage("fin"))
+
+
+
+
+
+#順便叫醒Heroku用
+@app.route("/broadcast", methods=['GET'])
+def Send():   
+    if int(rds.get("DoReport")):#要換成int才有bool作用
+        access_token = rds.hmget("group","access_token")[0].decode('utf-8')
+    
+        NowTime = datetime.datetime.now()
+        if NowTime.hour == 7 and NowTime.minute == 55 :
+             send_message(access_token, "打掃時間到瞜，快打掃!")      
+        elif NowTime.hour == 12 and NowTime.minute == 30  :
+             send_message(access_token, "睡覺了，休息才能做事!!")
+        elif NowTime.hour == 15 and NowTime.minute == 50 :
+            i = 0
+            while i <3:  
+                send_message(access_token, "打掃!")
+                time.sleep(1)
+                i = i + 1
+             
+                
+            
+            if rds.llen("UnRegisterUser") != 0:#沒註冊提醒
+                group_id = rds.hget("group","group_id").decode("utf-8")
+                word = "以下的人還沒註冊喔!快點註冊啦!!\n["
+                for i in rds.lrange("UnRegisterUser", 0, -1):
+                    try:
+                        word = word + int(i.decode('utf-8'))+","
+                    except:
+                        Chinese = "老" + i.decode('utf-8') + ","
+                        word  = word + Chinese
+                word = word.rstrip(",") + "]"
+                line_bot_api.push_message(group_id, TextSendMessage(word))
+                
+                
+        #打掃回報
+        if NowTime.hour == 8 and NowTime.minute == 5 :
+            CleaningCheckOn()
+        if NowTime.hour == 8 and NowTime.minute == 10 :
+            CleaningCheckOff()
+        if NowTime.hour == 16 and NowTime.minute == 0 :
+            CleaningCheckOn()
+        if NowTime.hour == 16 and NowTime.minute == 5 :
+            CleaningCheckOff()
+    return "sucess"
+
+
+@app.route("/awake", methods=['GET'])
+def awake():   
+   return "OK I am Up"
+
+
+if __name__ == "__main__":
+    app.run()
+    
+    
+
+
+
+
+

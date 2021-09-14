@@ -1,0 +1,401 @@
+from flask import Flask, request, abort
+from linebot import LineBotApi, WebhookHandler
+from linebot.exceptions import InvalidSignatureError, LineBotApiError
+from linebot.models import MessageEvent, TextMessage, TextSendMessage
+from oauth2client.service_account import ServiceAccountCredentials as SAC
+import sys
+import datetime
+import gspread
+import os
+import configparser
+import urllib
+import json
+import redis
+
+import datetime
+import time
+
+app = Flask(__name__)
+
+
+curpath = os.path.dirname(os.path.realpath(__file__))
+cfgpath = os.path.join(curpath, 'config.ini')
+# 取得config記事本裡的 LINE 聊天機器人基本資料
+config = configparser.ConfigParser()
+config.read('config.ini')
+
+line_bot_api = LineBotApi(config.get('line-bot','channel_access_token'))
+handler = WebhookHandler(config.get('line-bot','channel_secret'))
+user_id = config.get("user_id","Bot")
+
+# 接收 LINE 的資訊
+@app.route("/callback", methods=['POST'])
+def callback():
+    signature = request.headers['X-Line-Signature']
+
+    body = request.get_data(as_text=True)
+    app.logger.info("Request body: " + body)
+
+    try:
+        print(body, signature)
+        handler.handle(body, signature)
+        
+    except InvalidSignatureError:
+        abort(400)
+
+    return 'OK'
+
+
+#Line Notify第一階段，產生授權網址
+client_id = "4XVFGLChmjufoud813nheA"
+client_secret = 'YJ9LmymadKN5AOmU85u7DY0gOayv0jsZYfBW6jOnmpP'
+redirect_uri = "https://linebot21310.herokuapp.com/callback/notify"
+
+def create_auth_link(Id, client_id=client_id, redirect_uri=redirect_uri):
+    data={
+        'response_type': 'code', 
+        'client_id': client_id, 
+        'redirect_uri': redirect_uri, 
+        'scope': 'notify', 
+        'state': Id#此可為任何資料([]的資料不行，不知原因)，此處用於船user_id
+        }
+    query_str = urllib.parse.urlencode(data)
+    return f'https://notify-bot.line.me/oauth/authorize?{query_str}'
+
+#Line Notify第二，三階段，使用者完成授權網址的連動後，LINE Notify 會將 Code 和 State 等資料與使用者送到 Redirect URI，也就是此函式
+@app.route("/callback/notify", methods=['GET'])
+def callback_nofity():
+    assert request.headers['referer'] == 'https://notify-bot.line.me/'#確認是從 LINE Notify 發送過來的資料
+    code = request.args.get('code')#Get code
+    state = request.args.get('state')#get state(user_id)
+    
+    # 第三階段函式(用code去get access_token)
+    access_token = get_token(code)#其他三項已有，只要code就好
+
+    StoreToken(state,access_token)
+
+    send_message(access_token, "設定完成LineNotify了!!!")
+
+    return '恭喜完成 LINE Notify 連動！請關閉此視窗。'#使用者會看到的網頁
+
+#Line Notify第三階段，用code去get access_token
+def get_token(code, client_id=client_id, client_secret=client_secret, redirect_uri=redirect_uri):
+    url = 'https://notify-bot.line.me/oauth/token'
+    headers = { 'Content-Type': 'application/x-www-form-urlencoded' }
+    data = {
+        'grant_type': 'authorization_code',
+        'code': code,
+        'redirect_uri': redirect_uri,
+        'client_id': client_id,
+        'client_secret': client_secret
+        }
+    data = urllib.parse.urlencode(data).encode()#把所有需要data準備好
+    req = urllib.request.Request(url, data=data, headers=headers)#傳送資料到 LINE Notify
+    page = urllib.request.urlopen(req).read()#讀取 LINE Notify 回傳的資料
+    
+    res = json.loads(page.decode('utf-8'))#回傳的資料用json.loads轉換為字典物件
+    return res['access_token']#讀取字典其中一個key(access_token)
+
+#Line Notify第四階段，有access_token就可以傳訊息了
+def send_message(access_token, text_message):
+    url = 'https://notify-api.line.me/api/notify'
+    headers = {"Authorization": "Bearer "+ access_token}
+
+    data = {'message': text_message}#Line Notify必須傳文字訊息，所以"message"必須有
+
+    data = urllib.parse.urlencode(data).encode()
+    req = urllib.request.Request(url, data=data, headers=headers)
+    page = urllib.request.urlopen(req).read()
+
+
+
+#設定redis物件
+rds = redis.Redis(
+host = config.get('redis','host'),
+port = int(config.get('redis','port')),
+password = config.get('redis','password')
+)
+
+#set 資料(存於redis中)
+if rds.exists("DoReport") == False:
+    rds.set("DoReport",1)#0是False
+if rds.exists("StartSetting") == False:
+    rds.set("StartSetting",1)#0是False
+if rds.exists("UnRegisterUser") == False:
+   for i in range(1,45):
+        rds.rpush("UnRegisterUser",i)
+   rds.rpush("UnRegisterUser","我是老師")
+   rds.rpush("UnRegisterUser","我是老師")
+   rds.rpush("UnRegisterUser","我是環保")
+   rds.rpush("UnRegisterUser","我是服務")
+   rds.rpush("UnRegisterUser","我是衛生")
+   rds.rpush("UnRegisterUser","我是作者")
+if rds.exists("MiuseCommand") == False:
+   for i in range(1,45):
+       rds.rpush("MiuseCommand",str(i)+"扣")
+if rds.exists("PlusCommand") == False:
+   for i in range(1,45):
+       rds.rpush("PlusCommand",str(i)+"加")
+    
+   
+def StoreToken(Id,access_token):
+    if Id[0] == "U":#註冊User
+        userProfile = line_bot_api.get_profile(Id)
+        
+        #if rds.exists("user:%s"%Id) == False:
+        things = {
+        "access_token":access_token,
+        } 
+        rds.hmset("user:%s"%Id,things)
+   
+    else:#註冊group
+        summary = line_bot_api.get_group_summary(Id)
+    
+        things = {
+        "access_token":access_token,
+        "name":summary.group_name
+        } 
+        rds.hmset("group",things)
+        
+
+
+GDriveJSON = 'mabolinebotcleaningdos-03637c02e1e7.json'#GDriveJSON就輸入下載下來Json檔名稱
+GSpreadSheet = '馬波的LineBot分數表' #GSpreadSheet是google試算表名稱
+
+scope = ['https://www.googleapis.com/auth/drive']#定義存取的Scope(範圍)，也就是Google Sheet
+key = SAC.from_json_keyfile_name(GDriveJSON, scope)
+gc = gspread.authorize(key)
+worksheet = gc.open(GSpreadSheet).sheet1#sheet1指第一個sheey
+
+
+    
+StartMessage = "你好!我是馬波的Line機器人，目前只有兩項功能:\n1.提醒打掃和午睡時間\n2.計分系統(Beta版)\n\n為了讓我順利工作還不用薪水(還有讓作者偷懶)，拜託拜託幫我做下面的動作，誠實不亂回答，我承受不了亂試的，拜託配合了!!\nA.Line Notify連動\n\t1.點下面的連結(作者不會寫病毒，請安心)\n\t2.選擇「透過 1 對 1 聊天接收 LINE Notify 通知」然後按「同意並連動」\n\t3.從Line Noitfy收到「設定完成LineNotify了!!!」就完成啦\nB.紀錄號碼\n\t1.請告訴我你是幾號(老師不用)\n\tEx:你是22號，就傳「22」\n\t2.如果你是打掃三股長請告訴我\n\tEx:你是環保股長，就傳「我是環保」(老師就傳「我是老師」)\nPs.請傳的格式保持一致，有問題或bug要回報喔\nPs2.我晚上12-7點要睡覺，不要在這時候使用服務喔\n\nLine Notify連結:\n"
+
+
+@handler.add(MessageEvent, message=TextMessage)
+def reply(event):
+    try:
+        group_id = event.source.group_id
+        user_id = event.source.user_id
+    except:
+        user_id = event.source.user_id
+    
+    NowTime = datetime.datetime.now()   #get現在時間
+   
+    
+        
+    if event.message.text == "設定開始!!":
+        if int(rds.get("StartSetting")):
+            rds.set("group_id",group_id)#group id get
+            
+            user_ids = line_bot_api.get_group_member_ids(group_id)          
+            for i in user_ids.member_ids:
+                line_bot_api.push_message(i,TextSendMessage(StartMessage + create_auth_link(i)))#user access token get
+            
+            line_bot_api.reply_message(event.reply_token,TextSendMessage("設定內容已經私聊各位喽!"))
+            #rds.set("StartSetting",0)
+    if bytes(event.message.text,"utf-8") in rds.lrange("UnRegisterUser", 0, -1):#註冊號碼與職位回傳           
+        try:
+            if int(event.message.text) in range(1,45):                
+                rds.hsetnx("Number_Id",event.message.text,user_id)#hsetnx才可以無中生有
+                line_bot_api.reply_message(event.reply_token,TextSendMessage("我知道了!你是%s號"%event.message.text))
+        except:
+            if event.message.text in ["我是環保","我是服務","我是衛生"]:
+                rds.rpush("Cleaning_Id",user_id)
+                line_bot_api.reply_message(event.reply_token,TextSendMessage("我知道了!你是打掃三股長之一\n\n你有一個權力:\n監督沒打掃的人，然後扣分，只要傳給我「(號碼)扣」就會扣他一分\nEx:10號沒打掃，就傳「10扣」"))
+            if event.message.text == "我是老師":
+                rds.rpush("Teacher_Id",user_id)
+                line_bot_api.reply_message(event.reply_token,TextSendMessage("我知道了!你是老師"))
+            if event.message.text == "我是作者":
+                rds.rpush("Author_Id",user_id)
+                line_bot_api.reply_message(event.reply_token,TextSendMessage("我知道了!你是作者\nGroupLink:\n"+create_auth_link(rds.get("group_id").decode("utf-8"))))#get group access token
+            
+        #rds.lrem("UnRegisterUser",0,event.message.text)#刪除全部有text的東西(避免重複註冊)
+        
+        if rds.llen("UnRegisterUser") == 0:
+            access_token = rds.hmget("group","access_token")[0].decode('utf-8')
+            send_message(access_token, "全部人都註冊好瞜!!謝謝大家配合!!")
+    
+    if event.message.text == "確認註冊情形":
+        finalword = ""
+        if rds.exists("Cleaning_Id"):
+            cleaning_id = "打掃三股長user_id="+str(rds.lrange("Cleaning_Id", 0, -1))
+            finalword = finalword + cleaning_id+"\n"
+            tokens=[]
+            for i in rds.lrange("Cleaning_Id", 0, -1):
+                Id = i.decode("utf-8")
+                if rds.hexists("user:%s"%Id,"access_token"):
+                    tokens.append(rds.hmget("user:%s"%Id,"access_token")[0].decode('utf-8'))
+            cleaning_token = "打掃三股長access_token="+str(tokens)
+            finalword = finalword + cleaning_token+"\n\n"
+              
+        if rds.exists("Teacher_Id"):
+            teacher_id = "老師user_id="+str(rds.lrange("Teacher_Id", 0, -1))
+            finalword = finalword + teacher_id+"\n"
+            tokens=[]
+            for i in rds.lrange("Teacher_Id", 0, -1):
+                Id = i.decode("utf-8")
+                if rds.hexists("user:%s"%Id,"access_token"):
+                    tokens.append(rds.hmget("user:%s"%Id,"access_token")[0].decode('utf-8'))
+            teacher_token = "老師access_token="+str(tokens)
+            finalword = finalword + teacher_token+"\n\n"
+        
+        student_word = ""
+        for i in range(1,45):
+            if rds.hexists("Number_Id", str(i)):
+                student_id = rds.hmget("Number_Id", str(i))[0].decode('utf-8')
+                student_word = student_word + "%i號user_id="%i + student_id +"\n"
+                if rds.hexists("user:%s"%student_id,"access_token"):
+                    student_token = rds.hmget("user:%s"%student_id,"access_token")[0].decode('utf-8')
+                    student_word = student_word + "%i號access_token="%i + student_token +"\n"
+        student_word = student_word.rstrip()
+        finalword = finalword + student_word
+            
+        line_bot_api.reply_message(event.reply_token,TextSendMessage("結果如下:\n"+finalword))
+    
+    
+    
+    if bytes(event.message.text,"utf-8") in rds.lrange("MiuseCommand", 0, -1) :#扣分
+        if bytes(user_id,"utf-8") in rds.lrange("Cleaning_Id", 0, -1):#確認為三股長
+            num = event.message.text.rstrip("扣")    
+            WantedId = rds.hmget("Number_Id",num)[0].decode('utf-8')#get 被改的user_id
+            newScore = int(rds.hmget("user:%s"%WantedId,"score")[0]) - 1#改分數
+            rds.hset("user:%s"%WantedId,"score",newScore)
+            
+            line_bot_api.reply_message(event.reply_token,TextSendMessage("扣好分了!\n%s號剩下%i分瞜!"%(num,int(rds.hmget("user:%s"%WantedId,"score")[0]))))
+        else:
+            line_bot_api.reply_message(event.reply_token,TextSendMessage("不是股長別亂傳!!"))
+    if bytes(event.message.text,"utf-8") in rds.lrange("PlusCommand", 0, -1) :#加分
+        if bytes(user_id,"utf-8") in rds.lrange("Author_Id", 0, -1):#確認為作者
+            num = event.message.text.rstrip("加")    
+            WantedId = rds.hmget("Number_Id",num)[0].decode('utf-8')#get 被改的user_id
+            newScore = int(rds.hmget("user:%s"%WantedId,"score")[0]) + 1#改分數
+            rds.hset("user:%s"%WantedId,"score",newScore)
+            
+            line_bot_api.reply_message(event.reply_token,TextSendMessage("加好分了!\n%s號有%i分瞜!"%(num,int(rds.hmget("user:%s"%WantedId,"score")[0]))))
+        else:
+            line_bot_api.reply_message(event.reply_token,TextSendMessage("恭喜發現隱藏功能!!但你沒有權限使用喔!"))
+    if event.message.text == "確認大家分數":
+        student_score = ""
+        for i in range(1,45):
+            if rds.hexists("Number_Id", str(i)):
+                student_id = rds.hmget("Number_Id", str(i))[0].decode('utf-8')
+                if rds.hexists("user:%s"%student_id,"score"):
+                    Score = rds.hmget("user:%s"%student_id,"score")[0].decode('utf-8')
+                    student_score = student_score + "%i號有 "%i + Score +" 分\n"
+        student_score = student_score.rstrip()
+        line_bot_api.reply_message(event.reply_token,TextSendMessage("大家分數如下:\n"+student_score))
+        
+        
+    
+    if event.message.text == "開始提醒":
+        if bytes(user_id,"utf-8") in rds.lrange("Author_Id", 0, -1):#確認為作者
+            line_bot_api.reply_message(event.reply_token,TextSendMessage("提醒功能啟動!!"))
+            rds.set("DoReport",1)
+    if event.message.text == "結束提醒":
+        if bytes(user_id,"utf-8") in rds.lrange("Author_Id", 0, -1):#確認為作者
+            line_bot_api.reply_message(event.reply_token,TextSendMessage("提醒功能結束"))
+            rds.set("DoReport",0)
+    
+    
+    
+
+             
+    
+    
+            
+    
+    if event.message.text == "ResetAll":              
+        rds.delete("Cleaning_Id")
+        rds.delete("Teacher_Id")
+        rds.delete("Number_Id") 
+        line_bot_api.reply_message(event.reply_token,TextSendMessage("Fininsh Reset"))
+    if event.message.text == "GetLink":        
+        line_bot_api.reply_message(event.reply_token,TextSendMessage("temporary link:"+create_auth_link(user_id)))
+    if event.message.text == "Wonwon":      
+        line_bot_api.reply_message(event.reply_token,TextSendMessage("OK!"))
+        Wonwon(user_id,group_id)     
+        
+    if event.message.text == "Hour":
+        line_bot_api.reply_message(event.reply_token,TextSendMessage(NowTime.hour))
+    if event.message.text == "Minute":
+        line_bot_api.reply_message(event.reply_token,TextSendMessage(NowTime.minute))
+    if event.message.text == "Second":
+        line_bot_api.reply_message(event.reply_token,TextSendMessage(NowTime.second))
+   
+
+        
+     
+  
+
+        
+
+
+
+
+#每一秒呼叫Wonwon()
+def Wonwon(user_id,group_id): 
+    access_token = rds.hmget("user:%s"%user_id,"access_token")[0].decode('utf-8')#hmget出的是列表的byte，要編譯回utf-8 + 取第0個才可
+    
+    i = 0
+    startTime = datetime.datetime.now()
+    
+    while i<= 2:
+        NowTime = datetime.datetime.now()
+        CalCulTime = NowTime.second - startTime.second
+        if CalCulTime>=1 or CalCulTime<=-59:
+            send_message(access_token, "wonwon!")
+            line_bot_api.push_message(user_id,TextSendMessage("won"))
+            i = i+1
+            startTime = datetime.datetime.now()
+        else:
+             continue
+    access_token = rds.hmget("group","access_token")[0].decode('utf-8')
+    send_message(access_token, "finish!")
+    line_bot_api.push_message(group_id,TextSendMessage("fin"))
+
+
+
+
+
+@app.route("/broadcast", methods=['GET'])
+def Send():   
+    if int(rds.get("DoReport")):#要換成int才有bool作用
+        access_token = rds.hmget("group","access_token")[0].decode('utf-8')
+    
+        NowTime = datetime.datetime.now()
+        if NowTime.hour == 7 and NowTime.minute == 55 :
+             send_message(access_token, "打掃時間到瞜，快打掃!")
+        elif NowTime.hour == 12 and NowTime.minute == 30  :
+             send_message(access_token, "睡覺了，休息才能做事!!")
+        elif NowTime.hour == 15 and NowTime.minute == 50 :
+            i = 0
+            while i <3:  
+                send_message(access_token, "打掃!")
+                time.sleep(1)
+                i = i + 1
+             
+                
+            if rds.llen("UnRegisterUser") != 0:#沒註冊提醒
+                word = "以下的人還沒註冊喔!快點註冊啦!!\n["
+                for i in rds.lrange("UnRegisterUser", 0, -1):
+                    try:
+                        word = word + int(i.decode('utf-8'))+","
+                    except:
+                        Chinese = i.decode('utf-8').lstrip("我是")+","
+                        word  = word + Chinese
+                word = word.rstrip(",") + "]"
+                send_message(access_token, word)
+    return "sucess"
+
+
+@app.route("/awake", methods=['GET'])
+def wake():   
+    return "nicessssss"
+
+
+   
+
+
+if __name__ == "__main__":
+    app.run()

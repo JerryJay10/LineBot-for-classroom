@@ -1,0 +1,153 @@
+﻿網站 : https://medium.com/life-of-small-data-engineer/%E5%86%8D%E6%88%B0-line-bot-sdk-%E6%8E%A5%E6%94%B6%E8%A8%8A%E6%81%AF%E8%88%87%E5%9B%9E%E6%87%89-aeb135eecc95
+網站 : https://www.learncodewithmike.com/2020/07/python-line-bot-deploy-to-heroku.html
+#記得安裝git和Heroku CLI，重開命令提示字元
+
+Line的函式庫(LINE Messaging API) : https://github.com/line/line-bot-sdk-python
+
+LineBot網站:https://manager.line.biz/account/@080hujqa/setting
+
+Line Message介紹：https://ithelp.ithome.com.tw/articles/10229773
+
+Push 步驟 :
+
+	git add .
+	git commit -m "update"
+	git push heroku main
+
+
+
+PS.程式仍有bug要修
+    
+   要輸入LineBot資料夾路徑時要先cd DestTop再cd LineBot(如果LineBot在桌面)
+    
+   還有如果git push heroku master沒用了話，試試下面其中一個
+   
+   git push heroku Head:master
+   git push heroku main
+
+   
+   對了到LineBot輸入WedHookURL時要輸入 https://xxx.herokuapp.com/callback
+					xxx為Heroku的名子
+
+
+叫醒Heroku :
+	https://console.cron-job.org/jobs/3593165 (每天早上7-24時每20min叫醒，free dyno hour有550小時，這樣一個月最多花527小時，足矣)
+	#cron-job.org連續呼叫失敗太多次會自己結束，所以要return才可
+	#自己可以用AlertClock.py(7-24時每25min叫一次)，但0-7睡著後要手動叫醒，用cron-job.org較好
+	#還要用AlertClock.py記得Procfile要加clock: python AlertClock.py  requirement加APScheduler
+	#AlertClock.py教學:https://ithelp.ithome.com.tw/articles/10218874
+
+
+Line Notify手把手教學 : https://ithelp.ithome.com.tw/articles/10255064
+#Line Notify解除連動 : https://notify-bot.line.me/my/
+#Notify加入群組時機:大家註冊好後，註冊Group access Token之前
+#連動應該有上限
+
+
+config寫法 : http://www.jysblog.com/coding/python/python-%E8%AE%80%E5%AF%ABini%E9%85%8D%E7%BD%AE%E6%96%87%E6%AA%94/
+      教學2:https://officeguide.cc/configparser-python-configuration-file-parser-tutorial/
+#curpath = os.path.dirname(os.path.realpath(__file__))#找到此檔位於的路徑
+ cfgpath = os.path.join(curpath, 'config.ini')#找到在路徑中也有的config.ini，用/連在一起
+ 以上兩行在需要修改config檔時才要
+#用一個新的config不知為何在線上不行，線下可以，只好把RichMenu.ini塞到原本的config中
+
+redis : 
+	網站 : https://redislabs.com/
+	功用 : 解決Heroku事後更改資料不會儲存，會被覆蓋的問題
+	教學1 : https://b123105.blogspot.com/2020/01/heroku-redis.html
+	教學2 : https://swf.com.tw/?p=1216 
+	教學3 : https://iter01.com/542387.html
+	PS.Redis網站上有時差(-20小時)
+
+注意!!!!hmget的東西要[0].decode("utf-8"),其他從redis拿出的物件要.decode("utf-8")，不然會是bytes形式
+
+
+儲存access_token,user_id,職位與座號法(以方便傳訊息為主) : 
+	redis一號 : 座號 -> user_id
+	redis二號 : 職位 -> user_id
+	redis三號 : user_id ->access_token，座號與分數(用座號從google sheet拿)
+	
+儲存打掃股長user_id,職位與座號法(以方便傳訊息為主) : 
+	redis一號 : Cleaning_Num -> 股長們座號(一開始註冊用(註冊完時確認是不是打掃股長)，之後就用不上)
+	redis二號 : Cleaning_Id -> user_id(傳訊用)
+	redis三號 : user_id(股長的) -> 負責打掃區域(傳特定JSON用)
+	redis四號 : CleaningSection:user_id -> 所有在其中的人(註冊用，之後就用下面的)
+	redis五號 : CleaningSection:負責打掃區域 -> 所有在其中的人(製作JSON會用上)
+	
+#Manager_Id不能用num的方式(需在設定開始時自動設為管理員)，導致重選Manager時需要Number_Id(座號 -> user_id)，所以無法在未註冊完成之前使用重選Manager
+#未註冊完成時重新開始，怕會有在註冊中的人，感覺會有問題，所以在註冊完之前也不可以重新開始
+
+#不可以有同時是管理員和打掃股長的人，會出錯
+
+#目前演算法，只能等全班註冊完再加到班群，不然有人選錯會發訊息，不優(新版只能不用良心辨識)
+#push_message要有加好友or有私聊過才可以，但我無法控制她們，只能改成主動加好友
+
+#刪除打掃股長時，Cleaning_Num被當成暫存變數刪除，所以之後的程式不應使用Cleaning_Num判斷是否為打掃股長，會出錯(在YourDara上有做判斷，在有人刪除股長時擋下)
+#重選管理員時是用暫存變數，最後才改本體Manager_Id，所以不影響整體運作
+#刪除打掃股長與管理員時，如果他們正在使用RichMenu，原本是等用完RichMenu再刪，但感覺必出問題，所以就改成強制刪+退回原步驟(須把所有可能暫存變數刪除)
+
+#打掃股長改分數與管理員改分數(CleaningChangedNum與ChangedNum)，不能共用暫存變數(可能再強制刪除時把另一個人正在選的暫存變數刪除)
+							     ，也不能同時使用(都要改googleSheet為最終變數)
+
+#無法同時執行的功能(同時有兩人更改，一個人有改了但不一樣問題)：管理員/打掃股長改分數、定時廣播設定(改文字+開關)、
+							打掃相關設定(改打掃股長+開關)、重新開始(改管理員+全部重來(全部重來其實沒差，但危險的東西限制比較好))
+								不幹打掃股長(可能同時請同一人幫忙產生很多問題)
+#可以同時執行的功能(每個人有自己的暫時變數)：重選管理的人、刪除帳號
+
+
+google sheet手把手教學1:https://ithelp.ithome.com.tw/articles/10196704
+		  教學2:https://www.learncodewithmike.com/2020/08/python-write-to-google-sheet.html
+	        Api網站:https://github.com/burnash/gspread
+匯出google sheet教學:https://www.playpcesor.com/2019/02/google-sheet-docs-download-excel-word.html
+#scope = ['https://www.googleapis.com/auth/drive']代表的權限:https://developers.google.com/sheets/api/guides/authorizing
+#當權限給的不夠會出錯
+
+
+
+Buttons template message教學1:https://www.learncodewithmike.com/2020/07/line-bot-buttons-template-message.html
+			教學2:https://ithelp.ithome.com.tw/articles/10195640
+#需要from linebot.models import TemplateSendMessage,ButtonsTemplate,MessageTemplateAction,PostbackEvent,PostbackTemplateAction,ConfirmTemplate,CarouselTemplate,CarouselColumn
+#ButtonsTemplate只能有4個按鈕
+#PostbackTemplateAction中如果有test代表他會發一個Massage + Postback ，所以會與敷衍系統衝突，決定廢除test
+
+
+
+Flex Message手把手教學:https://ithelp.ithome.com.tw/articles/10243334
+Python操作JSON教學:https://clay-atlas.com/blog/2019/11/05/python-chinese-tutorial-json-package/
+Flex Message Simulator :https://account.line.biz/login?redirectUri=https%3A%2F%2Fdevelopers.line.biz%2Fflex-simulator%2F
+#需要from linebot.models import FlexSendMessage
+#注意!!JSON如果有中文似乎就不能傳!所以從flex-simulator用出來的JSON要洗一下產地，變為從Python產出的JSON，所有中文會自動變成UniCode，就沒問題了
+
+
+
+Flask開網站:https://ithelp.ithome.com.tw/articles/10213468
+Flask傳遞變數:http://yhhuang1966.blogspot.com/2019/08/python-flask.html
+#需要from flask import render_template,redirect,request
+
+
+
+LineBot RichMenus手把手教學:https://medium.com/enjoy-life-enjoy-coding/%E4%BD%BF%E7%94%A8-python-%E7%82%BA-line-bot-%E5%BB%BA%E7%AB%8B%E7%8D%A8%E4%B8%80%E7%84%A1%E4%BA%8C%E7%9A%84%E5%9C%96%E6%96%87%E9%81%B8%E5%96%AE-rich-menus-7a5f7f40bd1
+#個人實驗，每0.3秒換一個RichMenu最快且不會掉封包(但是會花3秒時間)，如果不間隔時間，會掉封包，間隔還有一秒(六張圖)，不是考慮對象
+#最後決定只能切三張(兩張過場，一張結果)
+#新使用while迴圈避免掉包，就可以無時間間隔(但實際執行仍有時間差啦)
+#RichMenu命名紀錄 : PostBack文字(ReplyData) --> 按鈕Icon名 (Back系列不去除在Icon名中的本名，所以會有RightRightBackClicked)
+		    RichMenu名字(用於找RichMenu_Id用)--> 1.全unClick 是 RM_本名 #本名是用Left,Middle,Right,Down(重複者加代號)，以免與PostBack文字相同
+							 2.全CantClick 是 RM_FinishTo本名
+							 3.一個Clicked 是 RM_本名按鈕Icon名Clicked
+#目前製作僅需做元件插圖，其他可程式，刪除也可程式
+
+#切換RichMenu時UsingRichMenu是存目的RichMenu名，使用型RichMenu則是存Clicked的RichMenu名
+
+python Pillow教學1 : https://yungyuc.github.io/oldtech/python/python_imaging.html
+	     教學2 : https://stackoverflow.com/questions/890051/how-do-i-generate-circular-thumbnails-with-pil
+	     教學3 : https://ithelp.ithome.com.tw/articles/10221491
+	     DOS : https://pillow.readthedocs.io/en/stable/reference/Image.html
+#需要pip install pillow和from PIL import Image,ImageDraw
+
+
+
+python開啟檔案對話框教學：https://shengyu7697.github.io/python-tkinter-filedialog/
+
+
+git解決中文亂碼:https://blog.miniasp.com/post/2017/09/17/Git-for-Windows-Command-Prompt-Display-Chinese-Issues
+git找到回朔的程式碼:https://git-scm.com/book/zh-tw/v2/Git-%E5%B7%A5%E5%85%B7-Revision-Selection
