@@ -2355,11 +2355,11 @@ def Send():
         #打掃回報
         if NowTime.hour == 8 and NowTime.minute == 5 :
             CleaningCheckOn()
-        if NowTime.hour == 8 and NowTime.minute == 10 :
+        elif NowTime.hour == 8 and NowTime.minute == 10 :
             CleaningCheckOff()
-        if NowTime.hour == 16 and NowTime.minute == 0 :
+        elif NowTime.hour == 16 and NowTime.minute == 0 :
             CleaningCheckOn()
-        if NowTime.hour == 16 and NowTime.minute == 5 :
+        elif NowTime.hour == 16 and NowTime.minute == 5 :
             CleaningCheckOff()
     return "sucess"
 
