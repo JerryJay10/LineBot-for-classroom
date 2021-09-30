@@ -102,8 +102,9 @@ config.read('C:/LineBot/config.ini',encoding="utf-8")#要用在上一層的confi
 
 
 #準備LineBot資料
-line_bot_api = LineBotApi('Y1LzBKoQn1WIslXTVLvfku5NiET/BVnwbgmrapIitiQ67UGJziyQuj4ZJqs24SMrQodeJO6cqVqKxZ43pfebDgzuQ0KkOtM/Oyp5E9BytIJqTZNbpNXNB6rODPyYhfXFcyO2Q1rnhZTp5jhhVpvo0gdB04t89/1O/w1cDnyilFU=')#放channel_access_token
-headers = {"Authorization":"Bearer Y1LzBKoQn1WIslXTVLvfku5NiET/BVnwbgmrapIitiQ67UGJziyQuj4ZJqs24SMrQodeJO6cqVqKxZ43pfebDgzuQ0KkOtM/Oyp5E9BytIJqTZNbpNXNB6rODPyYhfXFcyO2Q1rnhZTp5jhhVpvo0gdB04t89/1O/w1cDnyilFU=","Content-Type":"application/json"}
+channel_access_token = config.get('line-bot','channel_access_token')
+line_bot_api = LineBotApi(channel_access_token)#放channel_access_token
+headers = {"Authorization":"Bearer %s"%channel_access_token,"Content-Type":"application/json"}
 
 
 #要大的還是小的RichMenu(改變高度與層數)
