@@ -23,7 +23,7 @@ config.read('config.ini',encoding="utf-8")#encoding一定要加，不然會當�
 
 line_bot_api = LineBotApi(config.get('line-bot','channel_access_token'))
 handler = WebhookHandler(config.get('line-bot','channel_secret'))
-user_id = config.get("user_id","Bot")
+herokuApp_name = config.get('line-bot','herokuApp_name')
 
 
 # 接收 LINE 的資訊
@@ -47,7 +47,7 @@ def callback():
 #Line Notify第一階段，產生授權網址
 client_id = "4XVFGLChmjufoud813nheA"
 client_secret = 'YJ9LmymadKN5AOmU85u7DY0gOayv0jsZYfBW6jOnmpP'
-redirect_uri = "https://linebot21310.herokuapp.com/callback/notify"
+redirect_uri = "https://%s.herokuapp.com/callback/notify"%herokuApp_name
 
 def create_auth_link(Id, client_id=client_id, redirect_uri=redirect_uri):
     data={
@@ -639,14 +639,14 @@ def DataReply(event):
                         if bytes(user_id,"utf-8") not in rds.lrange("Manager_Id",0,-1):#如果招集者 == 老師，就不用再給一次
                             rdsRpush("Manager_Id",user_id)#老師有管理員權力
                         
-                        line_bot_api.reply_message(event.reply_token,TextSendMessage("2.連動Line Notify\n\n老師，請連動Line Notify！步驟:\n\t(1)點下面的連結\n\t(2)選擇「透過 1 對 1 聊天接收 LINE Notify 通知」然後按「同意並連動」即可\n\n網址:"+"https://linebot21310.herokuapp.com/CheckNotify/%s"%user_id))
+                        line_bot_api.reply_message(event.reply_token,TextSendMessage("2.連動Line Notify\n\n老師，請連動Line Notify！步驟:\n\t(1)點下面的連結\n\t(2)選擇「透過 1 對 1 聊天接收 LINE Notify 通知」然後按「同意並連動」即可\n\n網址:"+"https://%s.herokuapp.com/CheckNotify/%s"%(herokuApp_name,user_id)))
                     else:                   
                         userProfile = line_bot_api.get_profile(user_id)
                         rds.hset("Number_Id",num,user_id)
                         rds.hset("user:%s"%user_id,"name",userProfile.display_name)
                         rds.hset("user:%s"%user_id,"number",num)
                         
-                        line_bot_api.reply_message(event.reply_token,TextSendMessage("2.連動Line Notify\n\n%s同學，請連動Line Notify！步驟:\n\t(1)點下面的連結\n\t(2)選擇「透過 1 對 1 聊天接收 LINE Notify 通知」然後按「同意並連動」即可\n\n網址:"%userProfile.display_name + "https://linebot21310.herokuapp.com/CheckNotify/%s"%user_id))
+                        line_bot_api.reply_message(event.reply_token,TextSendMessage("2.連動Line Notify\n\n%s同學，請連動Line Notify！步驟:\n\t(1)點下面的連結\n\t(2)選擇「透過 1 對 1 聊天接收 LINE Notify 通知」然後按「同意並連動」即可\n\n網址:"%userProfile.display_name + "https://%s.herokuapp.com/CheckNotify/%s"%(herokuApp_name,user_id)))
                     rds.hset("user:%s"%user_id,"step",2)#前進一步
                 else:#No
                     line_bot_api.reply_message(event.reply_token,TextSendMessage("好喔，取消註冊。\n記得再重頭(第0步)註冊一次喔!"))
@@ -967,10 +967,12 @@ def DataReply(event):
                             CheckNum = CheckNum + num + ","
                         CheckNum = CheckNum.rstrip(",")
                         
-                        if bytes("師","utf-8")  not in rds.lrange("UnRegisterUser",0,-1):#跟老師(老師須完全註冊)說一下，不然會被濫用
-                            teacherId = rds.get("Teacher_Id").decode("utf-8")
-                            changer = rds.hget("user:%s"%user_id,"name").decode("utf-8")
-                            send_message(rds.hget("user:%s"%teacherId,"access_token").decode("utf-8"), "打掃股長 %s 將\n\n自己的掃區設為:%s\n自己館的人設為:\n%s\n\n跟您報備一下，避免這個功能被濫用"%(changer,LeadArea,CheckNum))
+                        
+                        changer = rds.hget("user:%s"%user_id,"name").decode("utf-8")
+                        for i in rds.lrange("Manager_Id",0,-1):#跟管理員說一下，不然會被濫用
+                            ManagerId = i.decode("utf-8")
+                            ManagerAccessToken = rds.hget("user:%s"%ManagerId,"access_token").decode("utf-8")          
+                            send_message(ManagerAccessToken, "打掃股長 %s 將\n\n自己的掃區設為:%s\n自己館的人設為:\n%s\n\n跟您報備一下，避免這個功能被濫用"%(changer,LeadArea,CheckNum))
                         
                         actList = [PostbackTemplateAction(label='重新選擇(長存)',data='DelCrew&start')]
                         line_bot_api.push_message(user_id,TextSendMessage("謝謝你的配合!!最後，請確認你選的是否正確:\n\n\t你管的人:%s\n\t你管的區域:%s\n\n如果有錯，請點下面的重新選擇鈕。沒錯了話你從現在起，就是打掃股長!之後合作愉快啦!!"%(CheckNum,LeadArea)))
@@ -2087,9 +2089,10 @@ def DataReply(event):
                             
                         word = "改完分數了！那回報結束了！辛苦了！"
                     
-                if bytes("師","utf-8")  not in rds.lrange("UnRegisterUser",0,-1):#老師註冊完才發通知
-                    teacherId = rds.get("Teacher_Id").decode("utf-8")
-                    send_message(rds.hget("user:%s"%teacherId,"access_token").decode("utf-8"), "%s完成回報！"%CleaningName)
+                    for i in rds.lrange("Manager_Id",0,-1):
+                        ManagerId = i.decode("utf-8")
+                        ManagerAccessToken = rds.hget("user:%s"%ManagerId,"access_token").decode("utf-8")
+                        send_message(rds.hget("user:%s"%ManagerAccessToken,"access_token").decode("utf-8"), "%s完成回報！"%CleaningName)
                 
                 if rds.exists("UnCleanNum:%s"%user_id):
                     rds.delete("UnCleanNum:%s"%user_id)#刪暫存變數
@@ -2260,15 +2263,16 @@ def CleaningCheckOn():
 
 def CleaningCheckOff():
     rds.delete("CleaningReporting")#可以使用了
-    rds.delete("UnCleanNum:%s"%user_id)#刪除可能的暫存變數
-    
-    teacherAccessToken = "0"
-    if bytes("師","utf-8")  not in rds.lrange("UnRegisterUser",0,-1):#老師註冊完才發通知
-        teacherId = rds.get("Teacher_Id").decode("utf-8")
-        teacherAccessToken = rds.hget("user:%s"%teacherId,"access_token").decode("utf-8")
+     
+    ManagerAccessToken = []
+    for i in rds.lrange("Manager_Id",0,-1):
+        ManagerId = i.decode("utf-8")
+        ManagerAccessToken.append(rds.hget("user:%s"%ManagerId,"access_token").decode("utf-8"))
     count = 0#慧英heroku特性回復。用完不用刪
     for i in rds.lrange("Cleaning_Id", 0, -1):
         cleanId = i.decode("utf-8")
+        rds.delete("UnCleanNum:%s"%cleanId)#刪除可能的暫存變數
+        
         if rds.exists("CleaningTemporaryReplace:%s"%cleanId):#有人代替
             cleanId = rds.hget("CleaningTemporaryReplace:%s"%cleanId,"ReplacerId").decode("utf-8")
         
@@ -2283,14 +2287,14 @@ def CleaningCheckOff():
             
             line_bot_api.push_message(cleanId,TextSendMessage(word))
             
-            if bytes("師","utf-8")  not in rds.lrange("UnRegisterUser",0,-1):#老師註冊完才發通知
+            for i in ManagerAccessToken:
                 CleaningName = rds.hget("user:%s"%cleanId).decode("utf-8")
-                send_message(teacherAccessToken, "%s 未完成回報！"%CleaningName)
+                send_message(i, "%s 未完成回報！"%CleaningName)
             count = count + 1
         
     if count == 0:#都有回報
-        if bytes("師","utf-8")  not in rds.lrange("UnRegisterUser",0,-1):#老師註冊完才發通知
-            send_message(teacherAccessToken, "全部打掃股長完成回報！")
+       for i in ManagerAccessToken:
+            send_message(i, "全部打掃股長完成回報！")
 
 def SortRedisList(ListName):#排序才舒服(氣泡排序)
     numList = []
