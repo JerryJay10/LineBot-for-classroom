@@ -2092,8 +2092,8 @@ def DataReply(event):
                     for i in rds.lrange("Manager_Id",0,-1):
                         ManagerId = i.decode("utf-8")
                         ManagerAccessToken = rds.hget("user:%s"%ManagerId,"access_token").decode("utf-8")
-                        send_message(rds.hget("user:%s"%ManagerAccessToken,"access_token").decode("utf-8"), "%s完成回報！"%CleaningName)
-                
+                        send_message(ManagerAccessToken, "%s完成回報！"%CleaningName)
+    
                 if rds.exists("UnCleanNum:%s"%user_id):
                     rds.delete("UnCleanNum:%s"%user_id)#刪暫存變數
                 OriginalStep = rds.hget("CleaningOriginalStep",user_id).decode("utf-8")
@@ -2288,7 +2288,7 @@ def CleaningCheckOff():
             line_bot_api.push_message(cleanId,TextSendMessage(word))
             
             for i in ManagerAccessToken:
-                CleaningName = rds.hget("user:%s"%cleanId).decode("utf-8")
+                CleaningName = rds.hget("user:%s"%cleanId,"name").decode("utf-8")
                 send_message(i, "%s 未完成回報！"%CleaningName)
             count = count + 1
         
