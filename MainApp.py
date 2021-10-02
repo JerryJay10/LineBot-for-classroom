@@ -447,7 +447,8 @@ def reply(event):
             line_bot_api.reply_message(event.reply_token,TextSendMessage("temporary person linkk:"+create_auth_link(user_id)))
         elif ReplyText == "Wonwon":      
             line_bot_api.reply_message(event.reply_token,TextSendMessage("OK!"))
-            Wonwon(user_id,group_id)     
+            line_bot_api.reply_message(event.reply_token,TextSendMessage("This Wont show"))
+            Wonwon(user_id)     
             
         elif ReplyText == "Hour":
             line_bot_api.reply_message(event.reply_token,TextSendMessage(NowTime.hour))
@@ -2315,7 +2316,7 @@ def SortRedisList(ListName):#排序才舒服(氣泡排序)
         rdsRpush(ListName,i)
 
 #每一秒呼叫Wonwon()
-def Wonwon(user_id,group_id): 
+def Wonwon(user_id): 
     access_token = rds.hmget("user:%s"%user_id,"access_token")[0].decode('utf-8')#hmget出的是列表的byte，要編譯回utf-8 + 取第0個才可
     
     i = 0
@@ -2333,7 +2334,7 @@ def Wonwon(user_id,group_id):
              continue
     access_token = rds.hmget("group","access_token")[0].decode('utf-8')
     send_message(access_token, "finish!")
-    line_bot_api.push_message(group_id,TextSendMessage("fin"))
+    line_bot_api.push_message(user_id,TextSendMessage("fin"))
 
 
 
