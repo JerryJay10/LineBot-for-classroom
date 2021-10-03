@@ -445,9 +445,9 @@ def reply(event):
             group_id = rds.hget("group","group_id").decode("utf-8")
             send_message(rds.hget("user:%s"%user_id,"access_token").decode("utf-8"),"Group_link(請先加入群組再註冊):"+create_auth_link(group_id))
             line_bot_api.reply_message(event.reply_token,TextSendMessage("temporary person linkk:"+create_auth_link(user_id)))
-        elif ReplyText == "Wonwon":      
-            line_bot_api.reply_message(event.reply_token,TextSendMessage("OK!"))
-            line_bot_api.reply_message(event.reply_token,TextSendMessage("This Wont show"))
+        elif ReplyText == "Wonwon":  
+            Token = event.reply_token
+            line_bot_api.reply_message(Token,TextSendMessage("OK!"))
             Wonwon(user_id)     
             
         elif ReplyText == "Hour":
@@ -2332,7 +2332,7 @@ def Wonwon(user_id):
             startTime = datetime.datetime.now()
         else:
              continue
-    access_token = rds.hmget("group","access_token")[0].decode('utf-8')
+         
     send_message(access_token, "finish!")
     line_bot_api.push_message(user_id,TextSendMessage("fin"))
 
