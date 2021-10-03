@@ -70,5 +70,78 @@ for i in range(1,TotalStudentNum+1):
     worksheet.append_row((i,80))
     print("fin google sheet set %i/%i"%(i,TotalStudentNum))
 #==========================# 
+print("")
+#=====更新RichMenu的Id=====#
+#imprt東西
+from linebot import (LineBotApi)
+import requests
+import json
+#準備LineBot資料
+channel_access_token = config.get('line-bot','channel_access_token')
+line_bot_api = LineBotApi(channel_access_token)#放channel_access_token
+headers = {"Authorization":"Bearer %s"%channel_access_token,"Content-Type":"application/json"}
+
+#製作開始
+total = len(config.sections())#有3個區域非RichMenu
+count = 0
+for sectionName in config.sections():
+    if "RM" in sectionName:#是RichMenu
+    
+        #要大的還是小的RichMenu(改變高度與層數)
+        if config.has_option(sectionName,'data5'):#有data5的都是大RichMenu
+            Height = 1631 #1631 = 843*2 - 55
+            IconLayer = 2
+        else:#小的
+            Height = 843
+            IconLayer = 1
+        
+        #分別要做什麼RichMenu(只要之盪是不是UClick即可)
+        if "Clicked" not in sectionName and "Finish" not in sectionName:
+            ClickState = "UnClick"
+        else:
+            ClickState = "NotUnClicked"
+        
+        #找回Icon名
+        nowIconNames = []
+        for key_value in config.items(sectionName):
+            if key_value[0] != "id":#key不是id
+                nowIconNames.append(key_value[1])#加value，也就是名子
+
+        #弄出PostBack Data(不用紀錄於config) 
+        DataArea = []
+        for m in range(0,IconLayer):        
+            for i in range(0,3):
+                if ClickState == "UnClick":#要輸入PostBack，其他就不用了(但RichMenu不能沒有area，所以仍要加東西)
+                    BackData = nowIconNames[i+m*3]
+                    DataArea.append({
+                                    "bounds": {"x": 30 + 815*i, "y": 30 + 788*m, "width": 785, "height": 758},
+                                    "action": {"type": "postback","data":BackData}
+                                    })
+                else:
+                    DataArea.append({
+                                    "bounds": {"x": 55 + 815*i, "y": 55 + 788*m, "width": 785, "height": 758},
+                                    "action": {"type": "postback","data":"0"}#空的(data必須塞東西，所以放0)
+                                    })
+             
+        #申請RichMenu + 記錄其Id + 設定RichMenu圖片 
+        body = {
+            "size": {"width": 2500, "height": Height},
+            "selected": "true",
+            "name": sectionName.lstrip("RM").lstrip("_"),
+            "chatBarText": "點我開關選單",
+            "areas":DataArea
+          }
+        req = requests.request('POST', 'https://api.line.me/v2/bot/richmenu', 
+                               headers=headers,data=json.dumps(body).encode('utf-8'))
+        print("richMenuId : " + req.text)
+        Id = req.text[15:].rstrip("\"}")#get RichMenu Id
+        config.set(sectionName, "Id", Id)#紀錄Id
+        with open("製作RichMenu相關/%s.png"%sectionName, 'rb') as f:#打開之前做好的RichMenu圖
+            line_bot_api.set_rich_menu_image(Id, "image/png", f)#設定圖片
+            
+    #記數
+    count = count + 1
+    print("fin RichMenu Id change %s/%s"%(count,total))
+#======================#
 
 print("\n\n人數更新結束")
