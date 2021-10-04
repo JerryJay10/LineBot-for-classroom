@@ -2090,10 +2090,10 @@ def DataReply(event):
                             
                         word = "改完分數了！那回報結束了！辛苦了！"
                     
-                    for i in rds.lrange("Manager_Id",0,-1):
-                        ManagerId = i.decode("utf-8")
-                        ManagerAccessToken = rds.hget("user:%s"%ManagerId,"access_token").decode("utf-8")
-                        send_message(ManagerAccessToken, "%s完成回報！"%CleaningName)
+                for i in rds.lrange("Manager_Id",0,-1):
+                    ManagerId = i.decode("utf-8")
+                    ManagerAccessToken = rds.hget("user:%s"%ManagerId,"access_token").decode("utf-8")
+                    send_message(ManagerAccessToken, "%s完成回報！"%CleaningName)
     
                 if rds.exists("UnCleanNum:%s"%user_id):
                     rds.delete("UnCleanNum:%s"%user_id)#刪暫存變數
