@@ -96,8 +96,8 @@ def make(TotalStudentNum):
       }
     }
     
-    
-    print("fin 管理員加扣分.json")
+    import os
+    os.system("echo fin 管理員加扣分.json")
     
     with open('管理員加扣分.json', 'w', encoding='utf-8') as f:
         json.dump(data, f)

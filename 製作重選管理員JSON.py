@@ -111,8 +111,8 @@ def make(TotalStudentNum):
       }
     }
     
-    
-    print("fin 重選管理員.json")
+    import os
+    os.system("echo fin 重選管理員.json")
     
     with open('重選管理員.json', 'w', encoding='utf-8') as f:
         json.dump(data, f)

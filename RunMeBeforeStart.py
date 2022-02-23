@@ -1,3 +1,21 @@
+#=========下載函式庫=========#
+import os
+os.system("echo 開始下載必要函式庫...")
+
+os.system("pip install redis")
+os.system("echo fin download redis API")
+os.system("pip install redis")
+os.system("echo fin download redis API")
+os.system("pip install redis")
+os.system("echo fin download redis API")
+os.system("echo .")
+os.system("echo .")
+os.system("echo 函式庫下載完成...")
+os.system("echo .")
+os.system("echo .")
+#==========================#
+
+
 #==========輸入數字=========#
 canGo = False
 TotalStudentNum = 0
@@ -7,20 +25,23 @@ while canGo == False:
     try:
         TotalStudentNum = int(TotalStudentNum)
         if TotalStudentNum <= 4:
-            print("必須>=4人！\n我想小班級應該用不到我")
+            os.system("echo 必須>=4人！")
+            os.system("echo 我想小班級應該用不到我")
         else:
             ConfirmWord = input("確定有 %i 個學生？(Y:對/其他字:錯)\n"%TotalStudentNum)
             if ConfirmWord != "Y":
-                print("重新輸入！")
+                os.system("echo 重新輸入！")
             else:
                 canGo = True
     except:
-        print("輸入數字！")
+        os.system("echo 輸入數字！")
 #==========================#   
       
 
 #==========更新人數=========#
-print("\n\n開始更新人數...")
+os.system("echo .")
+os.system("echo .")
+os.system("echo 開始更新人數...")
 
 #因為import要輸入程式名，不能用sring，所以只能土法煉鋼
 import 製作座號JSON as NumJSON
@@ -51,7 +72,7 @@ password = config.get('redis','password')
 #紀錄有幾個學生 
 rds.set("TotalStudentNum",TotalStudentNum)
 
-print("fin redis TotalStudentNum\n")
+os.system("echo fin redis TotalStudentNum\n")
 #==========================#   
 
 #====更新googlrSheet====#
@@ -66,11 +87,12 @@ key = SAC.from_json_keyfile_name(GDriveJSON, scope)
 gc = gspread.authorize(key)
 worksheet = gc.open(GSpreadSheet).sheet1#sheet1指第一個sheet
 
+worksheet.append_row(("號碼","分數"))
 for i in range(1,TotalStudentNum+1):
     worksheet.append_row((i,80))
-    print("fin google sheet set %i/%i"%(i,TotalStudentNum))
+    os.system("echo fin google sheet set %i/%i"%(i,TotalStudentNum))
 #==========================# 
-print("")
+os.system("echo .")
 #=====更新RichMenu的Id=====#
 #imprt東西
 from linebot import (LineBotApi)
@@ -133,7 +155,7 @@ for sectionName in config.sections():
           }
         req = requests.request('POST', 'https://api.line.me/v2/bot/richmenu', 
                                headers=headers,data=json.dumps(body).encode('utf-8'))
-        print("richMenuId : " + req.text)
+        os.system("echo richMenuId : " + req.text)
         Id = req.text[15:].rstrip("\"}")#get RichMenu Id
         config.set(sectionName, "Id", Id)#紀錄Id
         with open("製作RichMenu相關/%s.png"%sectionName, 'rb') as f:#打開之前做好的RichMenu圖
@@ -141,7 +163,8 @@ for sectionName in config.sections():
             
     #記數
     count = count + 1
-    print("fin RichMenu Id change %s/%s"%(count,total))
+    os.system("echo fin RichMenu Id change %s/%s"%(count,total))
 #======================#
-
-print("\n\n人數更新結束")
+os.system("echo .")
+os.system("echo .")
+os.system("echo 人數更新結束")
