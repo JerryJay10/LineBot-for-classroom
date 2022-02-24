@@ -216,7 +216,7 @@ def reply(event):
                 rdsRpush("Manager_Id",user_id)#發送者就會獲得管理權
                 rds.hset("group","group_id",group_id)
                 
-                line_bot_api.reply_message(event.reply_token, TextSendMessage("大家好啊！麻煩大家跟我加好友！\n\n幫助我們不要到2021年還在用「紙」「紙」這種19XX年前的骨董來紀錄打掃情況！"))
+                line_bot_api.reply_message(event.reply_token, TextSendMessage("大家好啊！麻煩大家跟我加好友！\n\n幫助我們不要到現在還在用「紙」「紙」這種19XX年前的骨董來紀錄打掃情況！"))
                 FlexMessage = json.load(open('座號選擇.json','r',encoding='utf-8'))
                 line_bot_api.broadcast(FlexSendMessage('註冊開始!!',FlexMessage))#傳給已是好友的人
             

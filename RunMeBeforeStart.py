@@ -87,7 +87,8 @@ key = SAC.from_json_keyfile_name(GDriveJSON, scope)
 gc = gspread.authorize(key)
 worksheet = gc.open(GSpreadSheet).sheet1#sheet1指第一個sheet
 
-worksheet.append_row(("號碼","分數"))
+worksheet.update("A1","號碼")
+worksheet.update("B1","分數")
 for i in range(1,TotalStudentNum+1):
     worksheet.append_row((i,80))
     os.system("echo fin google sheet set %i/%i"%(i,TotalStudentNum))
