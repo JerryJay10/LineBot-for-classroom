@@ -1,23 +1,4 @@
-#=========下載函式庫=========#
 import os
-os.system("echo 開始下載必要函式庫...")
-
-os.system("pip install redis")
-os.system("echo fin download redis API")
-os.system("pip install oauth2client")
-os.system("echo fin download oauth2client API")
-os.system("pip install gspread")
-os.system("echo fin download gspread API")
-os.system("pip install line-bot-sdk")
-os.system("echo fin download linebot SDK")
-os.system("echo .")
-os.system("echo .")
-os.system("echo 函式庫下載完成...")
-os.system("echo .")
-os.system("echo .")
-#==========================#
-
-
 #==========輸入數字=========#
 canGo = False
 TotalStudentNum = 0
@@ -39,6 +20,25 @@ while canGo == False:
         os.system("echo 輸入數字！")
 #==========================#   
       
+#=========下載函式庫=========#
+os.system("echo .")
+os.system("echo .")
+os.system("echo 開始下載必要函式庫...")
+
+os.system("pip install redis")
+os.system("echo fin download redis API")
+os.system("pip install oauth2client")
+os.system("echo fin download oauth2client API")
+os.system("pip install gspread")
+os.system("echo fin download gspread API")
+os.system("pip install line-bot-sdk")
+os.system("echo fin download linebot SDK")
+os.system("echo .")
+os.system("echo .")
+os.system("echo 函式庫下載完成...")
+os.system("echo .")
+os.system("echo .")
+#==========================#
 
 #==========更新人數=========#
 os.system("echo .")
