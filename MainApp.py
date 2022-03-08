@@ -154,7 +154,7 @@ def setData():
     if rds.exists("DoBroadcast") == False:
         rds.set("DoBroadcast",1)#0是False  
     if rds.exists("UnRegisterUser") == False and not rds.exists("HaveStarted"):#如果list沒東西就算是沒有exists！須限制
-        if rds.exists("TotalStudentNum") == False: #在還沒RunMeBeforeStart前上傳Heroku就會出錯，所以限制
+        if rds.exists("TotalStudentNum") == True: #在還沒RunMeBeforeStart前上傳Heroku就會出錯，所以限制
             TotalStudentNum = int(rds.get("TotalStudentNum").decode("utf-8"))
             for i in range(1,TotalStudentNum+1):
                 rdsRpush("UnRegisterUser",i)
