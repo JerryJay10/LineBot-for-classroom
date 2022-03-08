@@ -473,44 +473,46 @@ def reply(event):
 
 @handler.add(FollowEvent)# 加好友事件在此接收
 def FollowReply(event):
-    FlexMessage = json.load(open('座號選擇.json','r',encoding='utf-8'))
-    line_bot_api.reply_message(event.reply_token, FlexSendMessage('註冊開始!!',FlexMessage))#傳給剛加好友的人
+    if rds.exists("HaveStarted"): #開始才發
+        FlexMessage = json.load(open('座號選擇.json','r',encoding='utf-8'))
+        line_bot_api.reply_message(event.reply_token, FlexSendMessage('註冊開始!!',FlexMessage))#傳給剛加好友的人
     
 @handler.add(UnfollowEvent)# 封鎖事件在此接收(相當於刪除帳號)
 def UnFollowReply(event):
-    user_id = event.source.user_id  
-    if bytes(user_id,"utf-8") in rds.lrange("Manager_Id", 0, -1):#移除管理員身分
-        rds.lrem("Manager_Id",0,user_id)
-    elif bytes(user_id,"utf-8") in rds.lrange("Cleaning_Id", 0, -1):#移除打掃股長身分(能用RichMenu者必為選完股長者)
-        num = rds.hget("user:%s"%user_id,"number").decode("utf-8")    
-        rds.lrem("Cleaning_Num",0,num)#刪除選擇，不然重複註冊時仍會成為打掃股長
-        rds.lrem("Cleaning_Id",0,user_id)
-        LeadArea = rds.hget("user:%s"%user_id,"LeadSection").decode("utf-8")
-        rds.hdel("user:%s"%user_id,"LeadSection")
-        rds.delete("CleaningSection:%s"%user_id)
-        rds.delete("CleaningSection:%s"%LeadArea)
-        if rds.exists("QuittingCleaning:%s"%user_id):#有可能正在等是否要替代打掃股長，無效他！
-            DeleteAskingQuitting(user_id)
-        if rds.exists("CleaningTemporaryReplace:%s"%user_id):#有可能正在暫時委託他人做打掃股長
-            DeleteTemporaryReplacement(user_id)
-        
-        FirstManager_id = rds.lindex("Manager_Id", 0).decode("utf-8")
-        send_message(rds.hget("user:%s"%FirstManager_id,"access_token").decode("utf-8"),"有打掃股長很沒品地封鎖我了...，麻煩您重選打掃股長！不然股長會從缺！")
-        
-    if rds.exists("Teacher_Id") and rds.get("Teacher_Id").decode("utf-8") == user_id:#是老師
-        rds.delete("Teacher_Id")
-        rdsRpush("UnRegisterUser","師")
-    else:#同學
-        num = rds.hget("user:%s"%user_id,"number").decode("utf-8")    
-        rds.hdel("Number_Id", num)                                          
-        rdsRpush("UnRegisterUser",num)
-    if rds.hexists("user:%s"%user_id,"UsingRichMenu") and rds.exists("APersonCanUsingRichMenu"):
-        UsingClickedRichMenu = rds.hget("user:%s"%user_id,"UsingRichMenu").decode("utf-8")
-        if bytes(UsingClickedRichMenu,"utf-8") in rds.hkeys("APersonCanUsingRichMenu"):#正在用的是只能一個人用的RcihMenu，要讓別人可以用
-            rds.hdel("APersonCanUsingRichMenu",UsingClickedRichMenu)#讓其他人可用
-    rds.delete("user:%s"%user_id)
-    line_bot_api.unlink_rich_menu_from_user(user_id)#刪除RichMenu
-    rds.hdel("user:%s"%user_id,"UsingRichMenu")#要換新RichMenu，把舊的使用紀錄刪除
+    if rds.exists("HaveStarted"): #開始才發
+        user_id = event.source.user_id  
+        if bytes(user_id,"utf-8") in rds.lrange("Manager_Id", 0, -1):#移除管理員身分
+            rds.lrem("Manager_Id",0,user_id)
+        elif bytes(user_id,"utf-8") in rds.lrange("Cleaning_Id", 0, -1):#移除打掃股長身分(能用RichMenu者必為選完股長者)
+            num = rds.hget("user:%s"%user_id,"number").decode("utf-8")    
+            rds.lrem("Cleaning_Num",0,num)#刪除選擇，不然重複註冊時仍會成為打掃股長
+            rds.lrem("Cleaning_Id",0,user_id)
+            LeadArea = rds.hget("user:%s"%user_id,"LeadSection").decode("utf-8")
+            rds.hdel("user:%s"%user_id,"LeadSection")
+            rds.delete("CleaningSection:%s"%user_id)
+            rds.delete("CleaningSection:%s"%LeadArea)
+            if rds.exists("QuittingCleaning:%s"%user_id):#有可能正在等是否要替代打掃股長，無效他！
+                DeleteAskingQuitting(user_id)
+            if rds.exists("CleaningTemporaryReplace:%s"%user_id):#有可能正在暫時委託他人做打掃股長
+                DeleteTemporaryReplacement(user_id)
+            
+            FirstManager_id = rds.lindex("Manager_Id", 0).decode("utf-8")
+            send_message(rds.hget("user:%s"%FirstManager_id,"access_token").decode("utf-8"),"有打掃股長很沒品地封鎖我了...，麻煩您重選打掃股長！不然股長會從缺！")
+            
+        if rds.exists("Teacher_Id") and rds.get("Teacher_Id").decode("utf-8") == user_id:#是老師
+            rds.delete("Teacher_Id")
+            rdsRpush("UnRegisterUser","師")
+        else:#同學
+            num = rds.hget("user:%s"%user_id,"number").decode("utf-8")    
+            rds.hdel("Number_Id", num)                                          
+            rdsRpush("UnRegisterUser",num)
+        if rds.hexists("user:%s"%user_id,"UsingRichMenu") and rds.exists("APersonCanUsingRichMenu"):
+            UsingClickedRichMenu = rds.hget("user:%s"%user_id,"UsingRichMenu").decode("utf-8")
+            if bytes(UsingClickedRichMenu,"utf-8") in rds.hkeys("APersonCanUsingRichMenu"):#正在用的是只能一個人用的RcihMenu，要讓別人可以用
+                rds.hdel("APersonCanUsingRichMenu",UsingClickedRichMenu)#讓其他人可用
+        rds.delete("user:%s"%user_id)
+        line_bot_api.unlink_rich_menu_from_user(user_id)#刪除RichMenu
+        rds.hdel("user:%s"%user_id,"UsingRichMenu")#要換新RichMenu，把舊的使用紀錄刪除
     
     
 
