@@ -74,9 +74,9 @@ password = config.get('redis','password')
 #紀錄有幾個學生 
 rds.set("TotalStudentNum",TotalStudentNum)
 
-os.system("echo fin redis TotalStudentNum\n")
+os.system("echo fin redis TotalStudentNum")
 #==========================#   
-
+os.system("echo .")
 #====更新googlrSheet====#
 #設定google sheet
 from oauth2client.service_account import ServiceAccountCredentials as SAC
@@ -171,3 +171,5 @@ for sectionName in config.sections():
 os.system("echo .")
 os.system("echo .")
 os.system("echo 人數更新結束")
+os.system("echo .")
+os.system("pause")
