@@ -25,12 +25,16 @@ os.system("echo .")
 os.system("echo .")
 os.system("echo 開始下載必要函式庫...")
 
+os.system("echo .")
 os.system("pip install redis")
 os.system("echo fin download redis API")
+os.system("echo .")
 os.system("pip install oauth2client")
 os.system("echo fin download oauth2client API")
+os.system("echo .")
 os.system("pip install gspread")
 os.system("echo fin download gspread API")
+os.system("echo .")
 os.system("pip install line-bot-sdk")
 os.system("echo fin download linebot SDK")
 os.system("echo .")
@@ -65,7 +69,7 @@ ChooseFellowJSON.make(TotalStudentNum)
 import configparser
 import redis
 config = configparser.ConfigParser()
-config.read('config.ini')
+config.read('config.ini', encoding="utf-8")
 rds = redis.Redis(
 host = config.get('redis','host'),
 port = int(config.get('redis','port')),
