@@ -89,7 +89,8 @@ def make(TotalStudentNum):
       }
     }
     
-    print("fin 打掃成員選擇.json")
+    import os
+    os.system("echo fin 打掃成員選擇.json")
     
     with open('打掃成員選擇.json', 'w', encoding='utf-8') as f:
         json.dump(data, f)
