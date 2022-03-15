@@ -20,31 +20,6 @@ while canGo == False:
         os.system("echo 輸入數字！")
 #==========================#   
       
-#=========下載函式庫=========#
-os.system("echo .")
-os.system("echo .")
-os.system("echo 開始下載必要函式庫...")
-
-os.system("echo .")
-os.system("pip install redis")
-os.system("echo fin download redis API")
-os.system("echo .")
-os.system("pip install oauth2client")
-os.system("echo fin download oauth2client API")
-os.system("echo .")
-os.system("pip install gspread")
-os.system("echo fin download gspread API")
-os.system("echo .")
-os.system("pip install line-bot-sdk")
-os.system("echo fin download linebot SDK")
-os.system("echo .")
-os.system("pause")
-os.system("echo .")
-os.system("echo 函式庫下載完成...")
-os.system("echo .")
-os.system("echo .")
-#==========================#
-
 #==========更新人數=========#
 os.system("echo .")
 os.system("echo .")
@@ -64,7 +39,7 @@ ChooseReplaceCleaningJSON.make(TotalStudentNum)
 import 製作選擇打掃成員JSON as ChooseFellowJSON
 ChooseFellowJSON.make(TotalStudentNum)
 #==========================#   
-
+os.system("echo .")
 #====更新UnRegisterUser====#
 #設定redis物件
 import configparser
