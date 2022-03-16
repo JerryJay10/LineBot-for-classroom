@@ -87,7 +87,7 @@ line_bot_api = LineBotApi(channel_access_token)#放channel_access_token
 headers = {"Authorization":"Bearer %s"%channel_access_token,"Content-Type":"application/json"}
 
 #製作開始
-total = len(config.sections())#有3個區域非RichMenu
+total = len(config.sections()) - 3#有3個區域非RichMenu
 count = 0
 for sectionName in config.sections():
     if "RM" in sectionName:#是RichMenu
