@@ -144,9 +144,9 @@ for sectionName in config.sections():
         with open("製作RichMenu相關/%s.png"%sectionName, 'rb') as f:#打開之前做好的RichMenu圖
             line_bot_api.set_rich_menu_image(Id, "image/png", f)#設定圖片
             
-    #記數
-    count = count + 1
-    os.system("echo fin RichMenu Id change %s/%s"%(count,total))
+        #記數
+        count = count + 1
+        os.system("echo fin RichMenu Id change %s/%s"%(count,total))
 #======================#
 os.system("echo .")
 os.system("echo .")
