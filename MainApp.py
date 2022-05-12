@@ -483,7 +483,7 @@ def UnFollowReply(event):
         user_id = event.source.user_id  
         if bytes(user_id,"utf-8") in rds.lrange("Manager_Id", 0, -1):#移除管理員身分
             rds.lrem("Manager_Id",0,user_id)
-        elif bytes(user_id,"utf-8") in rds.lrange("Cleaning_Id", 0, -1):#移除打掃股長身分(能用RichMenu者必為選完股長者)
+        elif rds.exists("Cleaning_Id") and bytes(user_id,"utf-8") in rds.lrange("Cleaning_Id", 0, -1):#移除打掃股長身分
             num = rds.hget("user:%s"%user_id,"number").decode("utf-8")    
             rds.lrem("Cleaning_Num",0,num)#刪除選擇，不然重複註冊時仍會成為打掃股長
             rds.lrem("Cleaning_Id",0,user_id)
@@ -552,7 +552,7 @@ def DataReply(event):
                     if bytes(user_id,"utf-8") in rds.lrange("Manager_Id", 0, -1):#移除管理員身分
                         if rds.llen("Manager_Id") != 1:#只剩一個管理員，不行移除
                             rds.lrem("Manager_Id",0,user_id)
-                    elif bytes(user_id,"utf-8") in rds.lrange("Cleaning_Id", 0, -1):#移除打掃股長身分(能用RichMenu者必為選完股長者)
+                    elif rds.exists("Cleaning_Id") and bytes(user_id,"utf-8") in rds.lrange("Cleaning_Id", 0, -1):#移除打掃股長身分
                         rds.lrem("Cleaning_Id",0,user_id)
                         LeadArea = rds.hget("user:%s"%user_id,"LeadSection").decode("utf-8")
                         rds.hdel("user:%s"%user_id,"LeadSection")
