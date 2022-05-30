@@ -618,14 +618,14 @@ def DataReply(event):
                 else:#是已註冊號碼，提醒(不會前進一步)
                     if num == "師":  
                         HasGotUseid = rds.get("Teacher_Id").decode("utf-8")
-                        if rds.hexists("user:%s"%HasGotUseid,"name"):#完全註冊好了                  
+                        if bytes(num,"utf-8") in rds.lrange("UnRegisterUser",0,-1):#完全註冊好了                  
                             HasGotName = rds.hget("user:%s"%HasGotUseid,"name").decode("utf-8")
                             line_bot_api.reply_message(event.reply_token, TextSendMessage("老師已被%s註冊走了，如果你是老師，就請他重新註冊吧!"%HasGotName))
                         else:
                             line_bot_api.reply_message(event.reply_token, TextSendMessage("老師被「暫時」註冊走了，如果你是老師，可以等一下再按一次，可能就可以註冊or知道是誰註冊走的"))
                     else:
                         HasGotUseid = rds.hget("Number_Id",num).decode("utf-8")
-                        if rds.hexists("user:%s"%HasGotUseid,"name"):#完全註冊好了  
+                        if bytes(num,"utf-8") in rds.lrange("UnRegisterUser",0,-1):#完全註冊好了  
                             HasGotName = rds.hget("user:%s"%HasGotUseid,"name").decode("utf-8")
                             line_bot_api.reply_message(event.reply_token, TextSendMessage("%s號已被%s註冊走了，如果%s是你的號碼，就請他重新註冊吧!"%(num,HasGotName,num)))   
                         else:
