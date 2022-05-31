@@ -827,7 +827,8 @@ def DataReply(event):
                                                 rds.hdel("user:%s"%DisChosenId,"UsingRichMenu")#把使用紀錄刪除才可
                                             if bytes(UsingClickedRichMenu,"utf-8") in rds.hkeys("APersonCanUsingRichMenu"):#正在用的是只能一個人用的RcihMenu，要讓別人可以用
                                                 rds.hdel("APersonCanUsingRichMenu",UsingClickedRichMenu)#讓其他人可用
-                                            rds.hset("user:%s"%DisChosenId,"step","5")#強制回歸完成步
+                                            if DisChosenStep != "6":#在此步強制回歸完成步會出問題
+                                                rds.hset("user:%s"%DisChosenId,"step","5")#強制回歸完成步
                                             rds.delete("CleaningChangedNums")#要刪除所有可能的暫存變數
                                             rds.delete("QuittingCleaning:%s"%DisChosenId)#要刪除所有可能的暫存變數
                                             line_bot_api.push_message(DisChosenId, TextSendMessage("%s把您的打掃股長權限收回了，十分抱歉！\n\n如果您正在使用刪除帳號功能，會等到您用完再收回，其他功能已被強制停止"%taker))
