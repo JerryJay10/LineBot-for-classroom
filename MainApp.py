@@ -528,22 +528,19 @@ def DataReply(event):
     #-----------------註冊--------------------#     
     if ReplyData[0:3] == "del":#[0:3]指第0個起到第3個前#重新註冊
         if ReplyData[4:9] == "start":
-            if NowStep == "5" or (NowStep == "A" or NowStep == "a"):#完成註冊，或是(正要開始選打掃股長 或 正要開始捲打掃成員)才可用
-                if rds.exists("Cleaning_Id") and bytes(user_id,"utf-8") in rds.lrange("Cleaning_Id",0,-1):#是註冊完的打掃股長，需要先交出職位才可刪除帳號(沒註冊完的可)
-                    line_bot_api.reply_message(event.reply_token,TextSendMessage("請先交出打掃股長權限再刪帳號\n(先去「不幹打掃股長了」鈕)"))
-                else:                   
-                    word = '6.你認真要重新註冊?'
-                    if bytes(user_id,"utf-8") in rds.lrange("Manager_Id", 0, -1):#是管理員需要額外提醒
-                        if rds.llen("Manager_Id") == 1:#只剩一個管理員，不行移除
-                            word = word + "\n。只剩您是管理員，權力不移除\n。打掃股長也會留著"
-                        else:
-                            word = word + "\n。管理員身分會被一起移除\n。打掃股長仍會留著"
-                    
-                        word = word + "\n。打掃股長身分不會被移除\n(如果)"
-                    actList = [PostbackTemplateAction(label='認真的',data='del&do&YES') , PostbackTemplateAction(label='後悔了',data='del&do&NO')] 
-                    line_bot_api.reply_message(event.reply_token,TemplateSendMessage(alt_text='快跟我說要不要重新註冊!!',template=ConfirmTemplate(text=word,actions = actList)))
-                    rds.hset("user:%s"%user_id,"step",6)#前進一步
-                    rds.hset("user:%s"%user_id,"PreStep",NowStep) # 因為開始時可能為5 A a，要特別標記，在6回5的時候才能回到正確的開頭
+            if NowStep == "5" or (NowStep == "A" or NowStep == "a"):#完成註冊，或是(正要開始選打掃股長 或 正要開始捲打掃成員)才可用                 
+                word = '6.你認真要重新註冊?'
+                if bytes(user_id,"utf-8") in rds.lrange("Manager_Id", 0, -1):#是管理員需要額外提醒
+                    if rds.llen("Manager_Id") == 1:#只剩一個管理員，不行移除
+                        word = word + "\n。只剩您是管理員，權力不移除\n。打掃股長也會留著"
+                    else:
+                        word = word + "\n。管理員身分會被一起移除\n。打掃股長仍會留著"
+                
+                    word = word + "\n。打掃股長身分不會被移除\n(如果)"
+                actList = [PostbackTemplateAction(label='認真的',data='del&do&YES') , PostbackTemplateAction(label='後悔了',data='del&do&NO')] 
+                line_bot_api.reply_message(event.reply_token,TemplateSendMessage(alt_text='快跟我說要不要重新註冊!!',template=ConfirmTemplate(text=word,actions = actList)))
+                rds.hset("user:%s"%user_id,"step",6)#前進一步
+                rds.hset("user:%s"%user_id,"PreStep",NowStep) # 因為開始時可能為5 A a，要特別標記，在6回5的時候才能回到正確的開頭
             else:
                 line_bot_api.reply_message(event.reply_token,TextSendMessage("%s"%ReplyWrongStep(NowStep)))
         elif ReplyData[4:6] == "do":#刪除!!
@@ -570,9 +567,10 @@ def DataReply(event):
                         rds.hdel("Number_Id", num)                                          
                         rdsRpush("UnRegisterUser",num)
                     rds.delete("user:%s"%user_id)
-                    rds.hset("user:%s"%user_id,"step",0)#避免此時以前的步驟被亂點
+                    rds.hset("user:%s"%user_id,"step",0)#避免此時以前的步驟被亂點            
                     line_bot_api.unlink_rich_menu_from_user(user_id)#刪除RichMenu
-                    rds.hdel("user:%s"%user_id,"UsingRichMenu")#要換新RichMenu，把舊的使用紀錄刪除
+                    if rds.hexists("user:%s"%user_id,"UsingRichMenu"):
+                        rds.hdel("user:%s"%user_id,"UsingRichMenu")#要換新RichMenu，把舊的使用紀錄刪除
                     
                     line_bot_api.reply_message(event.reply_token, TextSendMessage("你的資料全部刪好了。有需要就重新再註冊一次吧!"))
                     FlexMessage = json.load(open('座號選擇.json','r',encoding='utf-8'))
