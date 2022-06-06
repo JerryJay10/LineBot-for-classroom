@@ -1437,7 +1437,10 @@ def DataReply(event):
                     Changer = rds.hget("user:%s"%user_id,"name").decode("utf-8")
                     if rds.exists("DeleteingManager") and rds.llen("DeleteingManager") != 0:#在選擇時已確定是Manager，直接刪OK
                         for i in rds.lrange("DeleteingManager",0,-1):
-                            DeletedId = rds.hget("Number_Id",i.decode("utf-8")).decode("utf-8")
+                            if i.decode("utf-8") == "師":
+                                DeletedId = rds.get("Teacher_Id").decode("utf-8")
+                            else:
+                                DeletedId = rds.hget("Number_Id",i.decode("utf-8")).decode("utf-8")
                             rds.lrem("Manager_Id",0,DeletedId)#除名單
                             
                             if line_bot_api.get_rich_menu_id_of_user(DeletedId) == config.get("RM_DownManage","id") or line_bot_api.get_rich_menu_id_of_user(DeletedId) == config.get("RM_MiddleManage","id"):                                
@@ -1462,7 +1465,10 @@ def DataReply(event):
                         rds.delete("DeleteingManager")#這些只是暫時的變數，必須除掉
                     if rds.exists("AddingManager") and rds.llen("AddingManager") != 0:#加上增加的數量
                         for i in rds.lrange("AddingManager",0,-1):
-                            AddId = rds.hget("Number_Id",i.decode("utf-8")).decode("utf-8")
+                            if i.decode("utf-8") == "師":
+                                AddId = rds.get("Teacher_Id").decode("utf-8")
+                            else:
+                                AddId = rds.hget("Number_Id",i.decode("utf-8")).decode("utf-8")                         
                             rdsRpush("Manager_Id",AddId)#加名單
                             if line_bot_api.get_rich_menu_id_of_user(AddId) == config.get("RM_MiddleNormal","id"):
                                 line_bot_api.link_rich_menu_to_user(AddId, config.get("RM_MiddleManage","id"))#變為管理員RichMenu
