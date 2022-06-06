@@ -405,43 +405,20 @@ def reply(event):
             if rds.exists("Number_Id"):
                 for i in rds.hkeys("Number_Id"):
                     Id = rds.hget("Number_Id",i.decode("utf-8")).decode("utf-8")
-                    Idlist.append(Id)
+                    Idlist.append(Id)               
             if rds.exists("Teacher_Id"):
                 Idlist.append(rds.get("Teacher_Id").decode("utf-8"))
-            if len(Idlist) != 0:
-                for i in Idlist:#已不會再未註冊完成時做，所以OK              
-                    if rds.hexists("user:%s"%i,"access_token"):
-                        Token = rds.hget("user:%s"%i,"access_token").decode("utf-8")
-                        send_message(Token, "重製作業已啟動，所有服務都會中止")
-                        send_message(Token, "真的")
-                        send_message(Token, "極其")
-                        send_message(Token, "高度")
-                        send_message(Token, "非常")
-                        send_message(Token, "超級")
-                        send_message(Token, "宇宙")
-                        send_message(Token, "世紀")
-                        send_message(Token, "無敵")              
-                        send_message(Token, "萬分")                  
-                        send_message(Token, "深深")
-                        send_message(Token, "地感謝您的使用。")#要提醒  
-                        send_message(Token, "如果真的結束了，請封鎖或退好友Line Bot，才不會收到更多訊息")
-                    line_bot_api.unlink_rich_menu_from_user(i)#刪除RichMenu
-            SleepBroadcastList = rds.lrange("BroadcastWord:午休", 0, -1)
-            CleaningBroadcastList = rds.lrange("BroadcastWord:打掃", 0, -1)
-            TotalStudentNum = int(rds.get("TotalStudentNum").decode("utf-8"))
-            rds.flushall()#把所有rds刪除
-            rds.set("TotalStudentNum",TotalStudentNum)#把學生總數弄回來
-            setData()#一開始的rds要弄回來              
-            for i in SleepBroadcastList:
-                rdsRpush("BroadcastWord:午休", i.decode("utf-8"))#廣播文字的rds要弄回來 
-            for i in CleaningBroadcastList:
-                rdsRpush("BroadcastWord:打掃", i.decode("utf-8"))#廣播文字的rds要弄回來 
-                
-            for i in range(1,TotalStudentNum+1):
-                ExcelNum = i + 1#1號在B2格
-                worksheet.update("B%i"%ExcelNum, 80)#改回原分數
-
-            line_bot_api.reply_message(event.reply_token,TextSendMessage("重置完成了。\n\n發送 註冊開始!! 到群組從頭開始\n\n感謝您的使用"))
+            line_bot_api.unlink_rich_menu_from_users(Idlist)
+                            
+            Token = rds.hget("group","access_token").decode("utf-8")
+            send_message(Token, "重製作業已啟動，所有服務都會中止")       #原本超多訊息干擾會來不及做完，就會停止，所以改成群組說明
+            send_message(Token, "如果真的結束了，請封鎖或退好友Line Bot，才不會收到更多訊息")
+            send_message(Token, "非常感謝您的使用。")
+            
+            actList = [PostbackTemplateAction(label='給我繼續',data='REsettingALL&KeepGoing')] 
+            line_bot_api.reply_message(event.reply_token,TemplateSendMessage(alt_text='喘一下 :',template=ConfirmTemplate(text="肆(2)喘一下:\n\n有夠累，呼，但不能回頭了\n就等老大說繼續！",actions = actList)))
+            rds.hset("user:%s"%user_id,"step","肆(2)")#前進一步
+            
         elif ReplyText == "GetLink":     
             group_id = rds.hget("group","group_id").decode("utf-8")
             send_message(rds.hget("user:%s"%user_id,"access_token").decode("utf-8"),"Group_link(請先加入群組再註冊):"+create_auth_link(group_id))
@@ -1507,31 +1484,24 @@ def DataReply(event):
                 rds.hset("user:%s"%user_id,"step","肆(2)")#前進一步
         elif NowStep == "肆(2)":#重置開始
             if ReplyData[13:21] == "Assured3":
+               
                 Idlist = []
                 if rds.exists("Number_Id"):
                     for i in rds.hkeys("Number_Id"):
                         Id = rds.hget("Number_Id",i.decode("utf-8")).decode("utf-8")
-                        Idlist.append(Id)
+                        Idlist.append(Id)               
                 if rds.exists("Teacher_Id"):
                     Idlist.append(rds.get("Teacher_Id").decode("utf-8"))
-                for i in Idlist:#已不會再未註冊完成時做，所以OK              
-                    if rds.hexists("user:%s"%i,"access_token"):
-                        Token = rds.hget("user:%s"%i,"access_token").decode("utf-8")
-                        send_message(Token, "重製作業已啟動，所有服務都會中止")
-                        send_message(Token, "真的")
-                        send_message(Token, "極其")
-                        send_message(Token, "高度")
-                        send_message(Token, "非常")
-                        send_message(Token, "超級")
-                        send_message(Token, "宇宙")
-                        send_message(Token, "世紀")
-                        send_message(Token, "無敵")              
-                        send_message(Token, "萬分")                  
-                        send_message(Token, "深深")
-                        send_message(Token, "地感謝您的使用。")#要提醒  
-                        send_message(Token, "如果真的結束了，請封鎖或退好友Line Bot，才不會收到更多訊息")
-                    line_bot_api.unlink_rich_menu_from_user(i)#刪除RichMenu
-                    
+                line_bot_api.unlink_rich_menu_from_users(Idlist)
+                                
+                Token = rds.hget("group","access_token").decode("utf-8")
+                send_message(Token, "重製作業已啟動，所有服務都會中止")       #原本超多訊息干擾會來不及做完，就會停止，所以改成群組說明
+                send_message(Token, "如果真的結束了，請封鎖或退好友Line Bot，才不會收到更多訊息")
+                send_message(Token, "非常感謝您的使用。")
+                
+                actList = [PostbackTemplateAction(label='給我繼續',data='REsettingALL&KeepGoing')] 
+                line_bot_api.reply_message(event.reply_token,TemplateSendMessage(alt_text='喘一下 :',template=ConfirmTemplate(text="肆(2)喘一下:\n\n有夠累，呼，但不能回頭了\n就等老大說繼續！",actions = actList)))
+            if ReplyData[13:22] == "KeepGoing":
                 SleepBroadcastList = rds.lrange("BroadcastWord:午休", 0, -1)
                 CleaningBroadcastList = rds.lrange("BroadcastWord:打掃", 0, -1)
                 TotalStudentNum = int(rds.get("TotalStudentNum").decode("utf-8"))
