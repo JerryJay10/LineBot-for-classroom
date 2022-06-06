@@ -411,12 +411,12 @@ def reply(event):
             line_bot_api.unlink_rich_menu_from_users(Idlist)
                             
             Token = rds.hget("group","access_token").decode("utf-8")
-            send_message(Token, "重製作業已啟動，所有服務都會中止")       #原本超多訊息干擾會來不及做完，就會停止，所以改成群組說明
-            send_message(Token, "如果真的結束了，請封鎖或退好友Line Bot，才不會收到更多訊息")
-            send_message(Token, "非常感謝您的使用。")
+            send_message(Token, "\n重製作業已啟動，所有服務都會中止")       #原本超多訊息干擾會來不及做完，就會停止，所以改成群組說明
+            send_message(Token, "\n如果真的結束了，請封鎖或退好友Line Bot，才不會收到更多訊息")
+            send_message(Token, "\n非常感謝您的使用。")           
             
             actList = [PostbackTemplateAction(label='給我繼續',data='REsettingALL&KeepGoing')] 
-            line_bot_api.reply_message(event.reply_token,TemplateSendMessage(alt_text='喘一下 :',template=ConfirmTemplate(text="肆(2)喘一下:\n\n有夠累，呼，但不能回頭了\n就等老大說繼續！",actions = actList)))
+            line_bot_api.reply_message(event.reply_token,TemplateSendMessage(alt_text='喘一下 :',template=ButtonsTemplate(text="肆(2)喘一下:\n\n有夠累，呼，但不能回頭了\n就等老大說繼續！",actions = actList)))
             rds.hset("user:%s"%user_id,"step","肆(2)")#前進一步
             
         elif ReplyText == "GetLink":     
@@ -1495,12 +1495,12 @@ def DataReply(event):
                 line_bot_api.unlink_rich_menu_from_users(Idlist)
                                 
                 Token = rds.hget("group","access_token").decode("utf-8")
-                send_message(Token, "重製作業已啟動，所有服務都會中止")       #原本超多訊息干擾會來不及做完，就會停止，所以改成群組說明
-                send_message(Token, "如果真的結束了，請封鎖或退好友Line Bot，才不會收到更多訊息")
-                send_message(Token, "非常感謝您的使用。")
+                send_message(Token, "\n重製作業已啟動，所有服務都會中止")       #原本超多訊息干擾會來不及做完，就會停止，所以改成群組說明
+                send_message(Token, "\n如果真的結束了，請封鎖或退好友Line Bot，才不會收到更多訊息")
+                send_message(Token, "\n非常感謝您的使用。")
                 
                 actList = [PostbackTemplateAction(label='給我繼續',data='REsettingALL&KeepGoing')] 
-                line_bot_api.reply_message(event.reply_token,TemplateSendMessage(alt_text='喘一下 :',template=ConfirmTemplate(text="肆(2)喘一下:\n\n有夠累，呼，但不能回頭了\n就等老大說繼續！",actions = actList)))
+                line_bot_api.reply_message(event.reply_token,TemplateSendMessage(alt_text='喘一下 :',template=ButtonsTemplate(text="肆(2)喘一下:\n\n有夠累，呼，但不能回頭了\n就等老大說繼續！",actions = actList)))
             if ReplyData[13:22] == "KeepGoing":
                 SleepBroadcastList = rds.lrange("BroadcastWord:午休", 0, -1)
                 CleaningBroadcastList = rds.lrange("BroadcastWord:打掃", 0, -1)
