@@ -1507,23 +1507,30 @@ def DataReply(event):
                 rds.hset("user:%s"%user_id,"step","肆(2)")#前進一步
         elif NowStep == "肆(2)":#重置開始
             if ReplyData[13:21] == "Assured3":
-                for i in rds.hkeys("Number_Id"):#已不會再未註冊完成時做，所以OK
-                    Id = rds.hget("Number_Id",i.decode("utf-8")).decode("utf-8")
-                    Token = rds.hget("user:%s"%Id,"access_token").decode("utf-8")
-                    send_message(Token, "重製作業已啟動，所有服務都會中止")
-                    send_message(Token, "真的")
-                    send_message(Token, "極其")
-                    send_message(Token, "高度")
-                    send_message(Token, "非常")
-                    send_message(Token, "超級")
-                    send_message(Token, "宇宙")
-                    send_message(Token, "世紀")
-                    send_message(Token, "無敵")              
-                    send_message(Token, "萬分")                  
-                    send_message(Token, "深深")
-                    send_message(Token, "地感謝您的使用。")#要提醒  
-                    send_message(Token, "如果真的結束了，請封鎖或退好友Line Bot，才不會收到更多訊息")
-                    line_bot_api.unlink_rich_menu_from_user(Id)#刪除RichMenu
+                Idlist = []
+                if rds.exists("Number_Id"):
+                    for i in rds.hkeys("Number_Id"):
+                        Id = rds.hget("Number_Id",i.decode("utf-8")).decode("utf-8")
+                        Idlist.append(Id)
+                if rds.exists("Teacher_Id"):
+                    Idlist.append(rds.get("Teacher_Id").decode("utf-8"))
+                for i in Idlist:#已不會再未註冊完成時做，所以OK              
+                    if rds.hexists("user:%s"%i,"access_token"):
+                        Token = rds.hget("user:%s"%i,"access_token").decode("utf-8")
+                        send_message(Token, "重製作業已啟動，所有服務都會中止")
+                        send_message(Token, "真的")
+                        send_message(Token, "極其")
+                        send_message(Token, "高度")
+                        send_message(Token, "非常")
+                        send_message(Token, "超級")
+                        send_message(Token, "宇宙")
+                        send_message(Token, "世紀")
+                        send_message(Token, "無敵")              
+                        send_message(Token, "萬分")                  
+                        send_message(Token, "深深")
+                        send_message(Token, "地感謝您的使用。")#要提醒  
+                        send_message(Token, "如果真的結束了，請封鎖或退好友Line Bot，才不會收到更多訊息")
+                    line_bot_api.unlink_rich_menu_from_user(i)#刪除RichMenu
                     
                 SleepBroadcastList = rds.lrange("BroadcastWord:午休", 0, -1)
                 CleaningBroadcastList = rds.lrange("BroadcastWord:打掃", 0, -1)
