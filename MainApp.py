@@ -2356,30 +2356,31 @@ def Send():
 #叫醒Heroku用
 @app.route("/awake", methods=['GET'])
 def awake():
-    NowTime = datetime.datetime.now()
-    if NowTime.hour == 7 and NowTime.minute == 0 :#檢查暫時委託時限到了沒(因可能結束時間在假日，需在awake中每天呼叫)
-        for i in rds.lrange("Cleaning_Id", 0, -1):
-            cleanId = i.decode("utf-8")
-            if rds.exists("CleaningTemporaryReplace:%s"%cleanId):#有暫時委託
-                if rds.hget("CleaningTemporaryReplace:%s"%cleanId,"StartWorkingDay").decode("utf-8") == "%i月%i日"%(NowTime.month,NowTime.day):#是開工日
-                    askerName = rds.hget("user:%s"%cleanId,"name").decode("utf-8")
-                    ReplacementId = rds.hget("CleaningTemporaryReplace:%s"%cleanId,"ReplacerId").decode("utf-8")
-                    line_bot_api.push_message(ReplacementId, TextSendMessage("%s的委託結束了！不用回報了！這段時間辛苦了！"%askerName))#通知不用回覆
-                    line_bot_api.push_message(cleanId, TextSendMessage("今天是開工日！之後就要回報了喔！"))
-                    rds.delete("CleaningTemporaryReplace:%s"%cleanId)#把這個刪除就oK了
-        
-        
-        if rds.llen("UnRegisterUser") != 0:#沒註冊提醒
-            group_id = rds.hget("group","group_id").decode("utf-8")
-            word = "以下的人還沒註冊喔!快點註冊啦!!\n["
-            for i in rds.lrange("UnRegisterUser", 0, -1):
-                try:
-                    word = word + str(int(i.decode('utf-8'))) +","
-                except:
-                    Chinese = "老" + i.decode('utf-8') + ","
-                    word  = word + Chinese
-            word = word.rstrip(",") + "]"
-            line_bot_api.push_message(group_id, TextSendMessage(word))
+    if rds.exists("HaveStarted"):
+        NowTime = datetime.datetime.now()
+        if NowTime.hour == 7 and NowTime.minute == 0 :#檢查暫時委託時限到了沒(因可能結束時間在假日，需在awake中每天呼叫)
+            for i in rds.lrange("Cleaning_Id", 0, -1):
+                cleanId = i.decode("utf-8")
+                if rds.exists("CleaningTemporaryReplace:%s"%cleanId):#有暫時委託
+                    if rds.hget("CleaningTemporaryReplace:%s"%cleanId,"StartWorkingDay").decode("utf-8") == "%i月%i日"%(NowTime.month,NowTime.day):#是開工日
+                        askerName = rds.hget("user:%s"%cleanId,"name").decode("utf-8")
+                        ReplacementId = rds.hget("CleaningTemporaryReplace:%s"%cleanId,"ReplacerId").decode("utf-8")
+                        line_bot_api.push_message(ReplacementId, TextSendMessage("%s的委託結束了！不用回報了！這段時間辛苦了！"%askerName))#通知不用回覆
+                        line_bot_api.push_message(cleanId, TextSendMessage("今天是開工日！之後就要回報了喔！"))
+                        rds.delete("CleaningTemporaryReplace:%s"%cleanId)#把這個刪除就oK了
+            
+            
+            if rds.llen("UnRegisterUser") != 0:#沒註冊提醒
+                group_id = rds.hget("group","group_id").decode("utf-8")
+                word = "以下的人還沒註冊喔!快點註冊啦!!\n["
+                for i in rds.lrange("UnRegisterUser", 0, -1):
+                    try:
+                        word = word + str(int(i.decode('utf-8'))) +","
+                    except:
+                        Chinese = "老" + i.decode('utf-8') + ","
+                        word  = word + Chinese
+                word = word.rstrip(",") + "]"
+                line_bot_api.push_message(group_id, TextSendMessage(word))
     return "OK I am Up"
     
 
